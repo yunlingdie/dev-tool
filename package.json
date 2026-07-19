@@ -1,0 +1,48 @@
+{
+  "name": "dev-toolbox",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "docs:sync": "node scripts/sync-docs.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.6",
+    "@lucide/vue": "^1.24.0",
+    "@peculiar/x509": "^2.0.0",
+    "@scure/base": "^2.2.0",
+    "crypto-js": "^4.2.0",
+    "curlconverter": "^4.12.0",
+    "diff": "^9.0.0",
+    "fast-xml-parser": "^5.10.1",
+    "php-parser": "^3.7.0",
+    "reflect-metadata": "^0.2.2",
+    "smol-toml": "^1.7.0",
+    "sql-formatter": "^15.8.2",
+    "ulid": "^3.0.2",
+    "uuid": "^14.0.1",
+    "vue": "^3.5.40",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@types/node": "^26.1.1",
+    "@types/sanitize-html": "^2.16.1",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "htmlparser2": "^10.1.0",
+    "marked": "^18.0.6",
+    "sanitize-html": "^2.17.6",
+    "tar": "^7.5.20",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10",
+    "vue-tsc": "^3.3.7"
+  }
+}

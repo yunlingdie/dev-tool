@@ -1,0 +1,68 @@
+import type { Component } from 'vue'
+
+export type ToolValue = string | number | boolean | File | null
+export type ToolValues = Record<string, ToolValue>
+
+export interface ToolOption {
+  label: string
+  value: string
+}
+
+export interface ToolField {
+  key: string
+  label: string
+  type: 'text' | 'textarea' | 'number' | 'select' | 'file'
+  defaultValue: ToolValue
+  placeholder?: string
+  options?: ToolOption[]
+  min?: number
+  max?: number
+  wide?: boolean
+  showWhen?: {
+    key: string
+    value: ToolValue
+  }
+}
+
+export interface ToolResult {
+  output: string
+  items?: string[]
+  language?: 'json'
+  filename?: string
+  mimeType?: string
+  downloadHref?: string
+  outputs?: ToolOutput[]
+}
+
+export interface ToolOutput {
+  label: string
+  content: string
+  items?: string[]
+  language?: 'json'
+  filename?: string
+  mimeType?: string
+  downloadHref?: string
+}
+
+export interface ToolPrefill {
+  fieldKey: string
+  value: string
+  revision: number
+}
+
+export interface ToolDefinition {
+  id: string
+  title: string
+  category: ToolCategory
+  icon: Component
+  fields: ToolField[]
+  actionLabel: string
+  execute: (values: ToolValues) => ToolResult | Promise<ToolResult>
+  outputLabel?: string
+  outputLabels?: string[]
+}
+
+export interface ToolCategory {
+  id: string
+  label: string
+}
