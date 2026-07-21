@@ -19,6 +19,14 @@ docker compose up -d
 
 Compose 不映射宿主机端口，项目目录挂载到容器的 `/workspace`，容器内 Vite 监听 `0.0.0.0:80`。OrbStack 默认访问地址：<http://web.dev-tool.orb.local>。
 
+## GitHub Pages
+
+推送到 `master` 后，GitHub Actions 会自动执行测试、按仓库子路径构建并部署站点：
+
+<https://yunlingdie.github.io/dev-tool/>
+
+仓库首次部署前，需要在 GitHub 的 `Settings > Pages` 中将 `Source` 设置为 `GitHub Actions`。
+
 ## 验证
 
 ```bash

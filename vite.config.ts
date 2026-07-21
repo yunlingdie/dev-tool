@@ -1,9 +1,42 @@
 import { defineConfig } from 'vite'
+import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
+
+const CURLCONVERTER_WEB_PARSER = /curlconverter[\\/]dist[\\/]src[\\/]shell[\\/]webParser\.js$/
+
+/** Makes curlconverter's public WASM files follow Vite's deployment base path. */
+function curlconverterWasmBasePlugin(): Plugin {
+  return {
+    name: 'curlconverter-wasm-base',
+    enforce: 'pre',
+    /** Rewrites only curlconverter's browser parser before Vite substitutes BASE_URL. */
+    transform(source, id) {
+      // Other modules must retain their original dependency code.
+      if (!CURLCONVERTER_WEB_PARSER.test(id)) {
+        return null
+      }
+
+      const coreWasmPath = 'return "/" + scriptName;'
+      const bashWasmPath = 'Parser.Language.load("/tree-sitter-bash.wasm")'
+
+      // Dependency upgrades must not silently restore root-relative Pages requests.
+      if (!source.includes(coreWasmPath) || !source.includes(bashWasmPath)) {
+        throw new Error('curlconverter browser WASM paths have changed')
+      }
+
+      return source
+        .replace(coreWasmPath, 'return import.meta.env.BASE_URL + scriptName;')
+        .replace(
+          bashWasmPath,
+          'Parser.Language.load(import.meta.env.BASE_URL + "tree-sitter-bash.wasm")',
+        )
+    },
+  }
+}
 
 // Provides the Vue compiler and the test defaults shared by local and CI runs.
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [curlconverterWasmBasePlugin(), vue()],
   server: {
     allowedHosts: ['web.dev-tool.orb.local'],
   },
