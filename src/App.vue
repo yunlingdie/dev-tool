@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { Code2, Menu, Search, X } from '@lucide/vue'
 
 import ToolSearchDialog from './components/ToolSearchDialog.vue'
@@ -27,13 +27,13 @@ function toolsForCategory(categoryId: string): ToolDefinition[] {
   return tools.filter((tool) => tool.category.id === categoryId)
 }
 
-/** Records a tool as most recently used and removes entries beyond the session limit. */
+/** Adds a tool once while preserving stable history positions and the session limit. */
 function rememberTool(tool: ToolDefinition): void {
   const existingIndex = openedTools.value.findIndex((openedTool) => openedTool.id === tool.id)
 
-  // Reusing a tool moves its single history entry to the most-recent position.
+  // Switching to an opened tool must not move its existing history tab.
   if (existingIndex >= 0) {
-    openedTools.value.splice(existingIndex, 1)
+    return
   }
 
   openedTools.value.push(tool)
@@ -51,6 +51,36 @@ function rememberTool(tool: ToolDefinition): void {
   for (const expiredTool of expiredTools) {
     delete toolPrefills[expiredTool.id]
   }
+}
+
+/** Closes one history tab, clears its state, and selects the nearest remaining tool. */
+async function closeHistoryTool(tool: ToolDefinition): Promise<void> {
+  const closingIndex = openedTools.value.findIndex((openedTool) => openedTool.id === tool.id)
+
+  // A stale close event must not remove an unrelated history entry.
+  if (closingIndex < 0) {
+    return
+  }
+
+  const wasSelected = selectedTool.value.id === tool.id
+  openedTools.value.splice(closingIndex, 1)
+  delete toolPrefills[tool.id]
+
+  // Closing a background tab must leave the active workbench and URL untouched.
+  if (!wasSelected) {
+    return
+  }
+
+  // The same index selects the right neighbor, while the final index falls back to the left.
+  if (openedTools.value.length > 0) {
+    const replacementIndex = Math.min(closingIndex, openedTools.value.length - 1)
+    selectTool(openedTools.value[replacementIndex])
+    return
+  }
+
+  // Let Vue unmount the final workbench before reopening the clean default tool.
+  await nextTick()
+  selectTool(findTool(''))
 }
 
 /** Selects a tool, updates the shareable URL, and closes the mobile drawer. */
@@ -201,34 +231,47 @@ onBeforeUnmount(() => {
         <div class="local-status"><span aria-hidden="true" />本地处理</div>
       </header>
 
-      <!-- Bounded session history keeps the most recently used workbenches directly reachable. -->
+      <!-- Bounded session history keeps stable tabs directly reachable and individually closeable. -->
       <nav class="tool-history" aria-label="工具历史">
         <span class="tool-history-label">历史</span>
         <div class="tool-history-items">
-          <button
+          <div
             v-for="tool in openedTools"
             :key="tool.id"
-            type="button"
             class="tool-history-item"
             :class="{ 'tool-history-item--active': selectedTool.id === tool.id }"
-            :aria-current="selectedTool.id === tool.id ? 'page' : undefined"
-            @click="selectTool(tool)"
           >
-            <component :is="tool.icon" :size="14" aria-hidden="true" />
-            <span>{{ tool.title }}</span>
-          </button>
+            <button
+              type="button"
+              class="tool-history-select"
+              :aria-current="selectedTool.id === tool.id ? 'page' : undefined"
+              @click="selectTool(tool)"
+            >
+              <component :is="tool.icon" :size="14" aria-hidden="true" />
+              <span>{{ tool.title }}</span>
+            </button>
+            <button
+              type="button"
+              class="tool-history-close"
+              :aria-label="`关闭 ${tool.title}`"
+              :data-tooltip="`关闭 ${tool.title}`"
+              @click="closeHistoryTool(tool)"
+            >
+              <X :size="13" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </nav>
 
       <div class="content-frame">
-        <!-- Keyed workbenches stay cached so each history entry retains form and result state. -->
-        <KeepAlive :max="MAX_TOOL_HISTORY">
-          <ToolWorkbench
-            :key="selectedTool.id"
-            :tool="selectedTool"
-            :prefill="toolPrefills[selectedTool.id]"
-          />
-        </KeepAlive>
+        <!-- Open workbenches stay mounted for state preservation; closing a tab unmounts its state. -->
+        <ToolWorkbench
+          v-for="tool in openedTools"
+          v-show="selectedTool.id === tool.id"
+          :key="tool.id"
+          :tool="tool"
+          :prefill="toolPrefills[tool.id]"
+        />
       </div>
     </main>
 

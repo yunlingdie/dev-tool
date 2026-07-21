@@ -260,11 +260,8 @@ textarea:focus-visible {
   min-height: 45px;
   flex: 0 0 auto;
   align-items: center;
-  gap: 7px;
-  padding: 8px 10px 6px;
   color: #56635e;
   background: transparent;
-  border: 0;
   border-bottom: 2px solid transparent;
 }
 
@@ -279,9 +276,43 @@ textarea:focus-visible {
   border-bottom-color: var(--primary);
 }
 
-.tool-history-item span {
+.tool-history-select {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 43px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 5px 6px 10px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+
+.tool-history-select span {
   font-size: 12px;
   white-space: nowrap;
+}
+
+.tool-history-close {
+  position: relative;
+  display: inline-grid;
+  width: 28px;
+  min-height: 43px;
+  flex: 0 0 28px;
+  place-items: center;
+  padding: 0;
+  color: #84908b;
+  background: transparent;
+  border: 0;
+}
+
+.tool-history-close:hover {
+  color: #a94725;
+  background: #f4e9e4;
+}
+
+.tool-history-item--active .tool-history-close {
+  color: #b56e55;
 }
 
 .tool-search-dialog {
