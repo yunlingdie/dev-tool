@@ -118,6 +118,7 @@ const displayedOutputs = computed<ToolOutput[]>(() => {
       label: props.tool.outputLabel ?? '输出',
       content: result.value.output,
       items: result.value.items,
+      itemLabels: result.value.itemLabels,
       language: result.value.language,
       filename: result.value.filename,
       mimeType: result.value.mimeType,
@@ -125,6 +126,21 @@ const displayedOutputs = computed<ToolOutput[]>(() => {
     },
   ]
 })
+
+/** Maps one unified diff prefix to its Git-style presentation class. */
+function diffLineClass(line: string): string {
+  // Plus-prefixed rows represent content introduced by the new text.
+  if (line.startsWith('+ ')) {
+    return 'diff-line--added'
+  }
+
+  // Minus-prefixed rows represent content removed from the original text.
+  if (line.startsWith('- ')) {
+    return 'diff-line--removed'
+  }
+
+  return 'diff-line--context'
+}
 
 /** Builds a stable feedback key for one generated item in one output panel. */
 function generatedItemKey(outputIndex: number, itemIndex: number): string {
@@ -395,14 +411,18 @@ function updateValue(field: ToolField, event: Event): void {
             </button>
           </div>
         </header>
-        <!-- Counted generators expose each value as a separately copyable row. -->
+        <!-- List results expose each value as a separately copyable row. -->
         <ul v-if="item.items?.length" class="generated-items">
           <li
             v-for="(generatedItem, itemIndex) in item.items"
             :key="`${generatedItem}-${itemIndex}`"
             class="generated-item"
           >
-            <code>{{ generatedItem }}</code>
+            <div class="generated-item-content">
+              <!-- Optional labels identify structured results without changing generator rows. -->
+              <span class="generated-item-label">{{ item.itemLabels?.[itemIndex] }}</span>
+              <code>{{ generatedItem }}</code>
+            </div>
             <button
               type="button"
               class="icon-button generated-item-copy"
@@ -426,6 +446,13 @@ function updateValue(field: ToolField, event: Event): void {
           v-else-if="item.language === 'json' && item.content"
           :content="item.content"
         />
+        <!-- Unified diff rows retain text markers while color separates additions and removals. -->
+        <pre v-else-if="item.language === 'diff' && item.content" class="diff-output"><code><span
+          v-for="(line, lineIndex) in item.content.split('\n')"
+          :key="`${lineIndex}-${line}`"
+          class="diff-line"
+          :class="diffLineClass(line)"
+        >{{ line }}</span></code></pre>
         <!-- Non-list results retain the existing multiline code output. -->
         <pre v-else><code>{{ item.content || '等待执行' }}</code></pre>
       </section>

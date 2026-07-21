@@ -45,7 +45,6 @@ const expectedToolIds = [
   'regex-tester',
   'ipv4-subnet',
   'ipv4-converter',
-  'ipv4-range',
   'mac-generator',
   'ipv6-ula',
   'text-compare',
@@ -90,6 +89,59 @@ describe('tool registry', () => {
     })
     await expect(Promise.resolve(dockerTool.execute(defaultValues(dockerTool)))).resolves.toMatchObject({
       output: expect.stringContaining('services:'),
+    })
+  })
+
+  it('renders date conversion as separately copyable Chinese rows', async () => {
+    const dateTool = toolById('date-time')
+    const values = defaultValues(dateTool)
+    values.input = '1970-01-01T00:00:00.000Z'
+    values.timeZone = 'Asia/Shanghai'
+    const result = await Promise.resolve(dateTool.execute(values))
+
+    expect(result).toEqual({
+      output: [
+        'ISO 时间: 1970-01-01T00:00:00.000Z',
+        'Unix 秒级时间戳: 0',
+        'Unix 毫秒级时间戳: 0',
+        '时区: Asia/Shanghai',
+        '本地时间: 1970-01-01 08:00:00',
+      ].join('\n'),
+      items: [
+        '1970-01-01T00:00:00.000Z',
+        '0',
+        '0',
+        'Asia/Shanghai',
+        '1970-01-01 08:00:00',
+      ],
+      itemLabels: ['ISO 时间', 'Unix 秒级时间戳', 'Unix 毫秒级时间戳', '时区', '本地时间'],
+    })
+  })
+
+  it('marks text comparison as a line-safe unified diff', async () => {
+    const compareTool = toolById('text-compare')
+    const values = defaultValues(compareTool)
+    const result = await Promise.resolve(compareTool.execute(values))
+
+    expect(result).toEqual({
+      output: ['  first line', '- old value', '+ new value'].join('\n'),
+      language: 'diff',
+    })
+  })
+
+  it('labels text statistics output in Chinese', async () => {
+    const statsTool = toolById('text-stats')
+    const values = defaultValues(statsTool)
+    values.input = 'Hello 世界😀\nnext'
+    const result = await Promise.resolve(statsTool.execute(values))
+
+    expect(result.language).toBe('json')
+    expect(JSON.parse(result.output)).toEqual({
+      '字符数': 14,
+      '不含空格字符数': 12,
+      '单词数': 4,
+      '行数': 2,
+      '字节数': 21,
     })
   })
 

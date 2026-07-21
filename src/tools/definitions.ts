@@ -31,7 +31,6 @@ import {
   calculateIpv4Subnet,
   compareText,
   convertIpv4Address,
-  expandIpv4Range,
   formatSqlText,
   formatXml,
   formatYaml,
@@ -180,30 +179,51 @@ function itemCount(values: ToolValues): number {
 
 /** Renders line or JSON diff fragments as a conventional unified text view. */
 function renderDiff(parts: DiffPart[]): string {
-  return parts
-    .map((part) => {
-      // Added fragments use the plus marker familiar from source diffs.
-      if (part.added) {
-        return part.value
-          .split('\n')
-          .map((line) => `+ ${line}`)
-          .join('\n')
-      }
+  const lines: string[] = []
 
-      // Removed fragments use the minus marker familiar from source diffs.
-      if (part.removed) {
-        return part.value
-          .split('\n')
-          .map((line) => `- ${line}`)
-          .join('\n')
-      }
+  for (const part of parts) {
+    let prefix = '  '
 
-      return part.value
-        .split('\n')
-        .map((line) => `  ${line}`)
-        .join('\n')
-    })
-    .join('')
+    // Added lines use the plus marker familiar from source diffs.
+    if (part.added) {
+      prefix = '+ '
+    } else if (part.removed) {
+      // Removed lines use the minus marker familiar from source diffs.
+      prefix = '- '
+    }
+
+    const partLines = part.value.split('\n')
+
+    // A final empty token represents the source newline, not another diff row.
+    if (part.value.endsWith('\n')) {
+      partLines.pop()
+    }
+
+    lines.push(...partLines.map((line) => `${prefix}${line}`))
+  }
+
+  return lines.join('\n')
+}
+
+/** Compares two text fields and marks the unified output for Git-style rendering. */
+function compareTextTool(values: ToolValues): ToolResult {
+  return {
+    output: renderDiff(compareText(textValue(values, 'before'), textValue(values, 'after'))),
+    language: 'diff',
+  }
+}
+
+/** Counts one text input and exposes the summary with Chinese field names. */
+function countTextTool(values: ToolValues): ToolResult {
+  const stats = countText(textValue(values, 'input'))
+
+  return output({
+    '字符数': stats.characters,
+    '不含空格字符数': stats.charactersWithoutSpaces,
+    '单词数': stats.words,
+    '行数': stats.lines,
+    '字节数': stats.bytes,
+  })
 }
 
 /** Selects a direction-specific converter without embedding branching in every tool handler. */
@@ -288,12 +308,20 @@ function generateUuid(values: ToolValues): ToolResult {
 function convertDateTool(values: ToolValues): ToolResult {
   const input = textValue(values, 'input')
   const converted = convertDate(input)
+  const timeZone = textValue(values, 'timeZone')
+  const items = [
+    { label: 'ISO 时间', value: converted.iso },
+    { label: 'Unix 秒级时间戳', value: String(converted.unixSeconds) },
+    { label: 'Unix 毫秒级时间戳', value: String(converted.unixMilliseconds) },
+    { label: '时区', value: timeZone },
+    { label: '本地时间', value: formatDateInTimeZone(input, timeZone) },
+  ]
 
-  return output({
-    ...converted,
-    timeZone: textValue(values, 'timeZone'),
-    localTime: formatDateInTimeZone(input, textValue(values, 'timeZone')),
-  })
+  return {
+    output: items.map(({ label, value }) => `${label}: ${value}`).join('\n'),
+    items: items.map(({ value }) => value),
+    itemLabels: items.map(({ label }) => label),
+  }
 }
 
 /** Converts a JSON array into a downloadable CSV text result. */
@@ -646,14 +674,6 @@ export const tools: ToolDefinition[] = [
     actionLabel: '转换地址', execute: (values) => output(convertIpv4Address(textValue(values, 'input'))),
   },
   {
-    id: 'ipv4-range', title: 'IPv4 范围扩展器', category: categoryById.network, icon: ListRestart,
-    fields: [
-      { key: 'start', label: '起始地址', type: 'text', defaultValue: '192.168.1.1' },
-      { key: 'end', label: '结束地址', type: 'text', defaultValue: '192.168.1.10' },
-      { key: 'limit', label: '最大展开数', type: 'number', defaultValue: 1024, min: 1, max: 65536 },
-    ], actionLabel: '展开范围', execute: (values) => output(expandIpv4Range(textValue(values, 'start'), textValue(values, 'end'), numberValue(values, 'limit')).join('\n')),
-  },
-  {
     id: 'mac-generator', title: 'MAC 地址生成器', category: categoryById.generate, icon: Network,
     fields: [
       { key: 'count', label: '数量', type: 'number', defaultValue: 5, min: 1, max: 100 },
@@ -673,12 +693,12 @@ export const tools: ToolDefinition[] = [
     fields: [
       { key: 'before', label: '原文本', type: 'textarea', defaultValue: 'first line\nold value\n', wide: true },
       { key: 'after', label: '新文本', type: 'textarea', defaultValue: 'first line\nnew value\n', wide: true },
-    ], actionLabel: '比较文本', execute: (values) => output(renderDiff(compareText(textValue(values, 'before'), textValue(values, 'after')))),
+    ], actionLabel: '比较文本', execute: compareTextTool,
   },
   {
     id: 'text-stats', title: '文本统计', category: categoryById.text, icon: ChartNoAxesColumnIncreasing,
     fields: [{ key: 'input', label: '文本', type: 'textarea', defaultValue: '', wide: true }],
-    actionLabel: '统计文本', execute: (values) => output(countText(textValue(values, 'input'))),
+    actionLabel: '统计文本', execute: countTextTool,
   },
 ]
 

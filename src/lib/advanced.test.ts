@@ -4,7 +4,6 @@ import {
   calculateIpv4Subnet,
   compareText,
   convertIpv4Address,
-  expandIpv4Range,
   formatSqlText,
   formatToml,
   formatXml,
@@ -156,19 +155,6 @@ describe('IPv4 tools', () => {
       lastUsableAddress: '10.0.0.9',
       usableHosts: 2,
     });
-  });
-
-  it('expands inclusive ranges and enforces the safety limit', () => {
-    // Verifies range output includes both endpoints and rejects oversized allocations.
-    expect(expandIpv4Range('192.168.1.254', '192.168.2.1')).toEqual([
-      '192.168.1.254',
-      '192.168.1.255',
-      '192.168.2.0',
-      '192.168.2.1',
-    ]);
-    // Verifies callers must explicitly opt in to materializing larger ranges.
-    const expandPastLimit = () => expandIpv4Range('10.0.0.1', '10.0.0.3', 2);
-    expect(expandPastLimit).toThrow(/exceeding limit/i);
   });
 });
 

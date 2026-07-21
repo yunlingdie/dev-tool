@@ -496,42 +496,6 @@ export function calculateIpv4Subnet(cidr: string): Ipv4SubnetResult {
   };
 }
 
-/** Expands an inclusive IPv4 range up to a caller-controlled safety limit. */
-export function expandIpv4Range(
-  start: string | number,
-  end: string | number,
-  limit = 65_536,
-): string[] {
-  // A positive integer limit prevents accidental allocation of an unbounded IPv4 range.
-  if (!Number.isSafeInteger(limit) || limit < 1) {
-    throw new RangeError('IPv4 expansion limit must be a positive integer.');
-  }
-
-  const startValue = parseIpv4Value(start);
-  const endValue = parseIpv4Value(end);
-
-  // Inclusive expansion only has a meaningful ascending range.
-  if (startValue > endValue) {
-    throw new RangeError('IPv4 range start must not be greater than its end.');
-  }
-
-  const addressCount = endValue - startValue + 1;
-
-  // Large ranges must be explicitly opted into by raising the limit.
-  if (addressCount > limit) {
-    throw new RangeError(`IPv4 range contains ${addressCount} addresses, exceeding limit ${limit}.`);
-  }
-
-  const addresses: string[] = [];
-
-  // The validated bound makes materializing each inclusive address predictable for the UI.
-  for (let value = startValue; value <= endValue; value += 1) {
-    addresses.push(renderIpv4(value));
-  }
-
-  return addresses;
-}
-
 /** Builds a deterministic MAC address from caller-provided entropy bytes. */
 export function generateMacAddress(
   entropy: ArrayLike<number>,

@@ -27,7 +27,8 @@ export interface ToolField {
 export interface ToolResult {
   output: string
   items?: string[]
-  language?: 'json'
+  itemLabels?: string[]
+  language?: 'json' | 'diff'
   filename?: string
   mimeType?: string
   downloadHref?: string
@@ -38,7 +39,8 @@ export interface ToolOutput {
   label: string
   content: string
   items?: string[]
-  language?: 'json'
+  itemLabels?: string[]
+  language?: 'json' | 'diff'
   filename?: string
   mimeType?: string
   downloadHref?: string
