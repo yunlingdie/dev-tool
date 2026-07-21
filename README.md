@@ -19,22 +19,6 @@ docker compose up -d
 
 Compose 不映射宿主机端口，项目目录挂载到容器的 `/workspace`，容器内 Vite 监听 `0.0.0.0:80`。OrbStack 默认访问地址：<http://web.dev-tool.orb.local>。
 
-## 离线参考文档
-
-Redis、PHP 和 Laravel 参考文档通过 `public/offline-docs/current` 在项目内读取，不会跳转到外部网站。内容范围为：
-
-- Redis：实际命令、参数、语法、示例、兼容性和返回值
-- PHP：语言语法、类型、函数、类和方法说明
-- Laravel：包含命令、方法、语法、代码或参考表格的章节及其直接说明
-
-需要更新官方内容时执行：
-
-```bash
-npm run docs:sync
-```
-
-同步默认依次使用 `http://127.0.0.1:7892` 和 `socks5h://127.0.0.1:7891`，可通过 `DOCS_PROXY` 覆盖。下载缓存位于 `.cache/offline-docs`，活动文档版本位于 `.cache/offline-docs-releases`；同步完成后通过相对软链接一次切换，普通启动不会访问网络或重复下载。
-
 ## 验证
 
 ```bash

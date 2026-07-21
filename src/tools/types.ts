@@ -48,6 +48,8 @@ export interface ToolPrefill {
   fieldKey: string
   value: string
   revision: number
+  autoRun: boolean
+  presetValues?: ToolValues
 }
 
 export interface ToolDefinition {

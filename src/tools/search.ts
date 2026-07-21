@@ -1,5 +1,5 @@
 import { tools } from './definitions'
-import type { ToolDefinition, ToolField } from './types'
+import type { ToolDefinition, ToolField, ToolValues } from './types'
 
 export type ToolSearchSuggestionKind = 'all' | 'content' | 'title'
 
@@ -9,12 +9,14 @@ export interface ToolSearchSuggestion {
   reason: string
   value: string
   fieldKey?: string
+  presetValues?: ToolValues
 }
 
 interface ContentRoute {
   toolId: string
   fieldKey: string
   reason: string
+  presetValues?: ToolValues
 }
 
 type JsonRootKind = 'array' | 'object' | 'scalar'
@@ -243,9 +245,14 @@ function contentRoutes(rawValue: string): ContentRoute[] {
     return [{ toolId: 'curl-fetch', fieldKey: 'input', reason: '检测到 cURL 命令' }]
   }
 
-  // Docker Run is the only Docker input shape that can be inferred without changing form options.
+  // Detected Docker Run must force the forward mode even when a cached tool was left reversed.
   if (looksLikeDockerRun(value)) {
-    return [{ toolId: 'docker-converter', fieldKey: 'input', reason: '检测到 Docker Run' }]
+    return [{
+      toolId: 'docker-converter',
+      fieldKey: 'input',
+      reason: '检测到 Docker Run',
+      presetValues: { direction: 'run-to-compose' },
+    }]
   }
 
   // PHP key-value syntax is unambiguous enough to offer its dedicated converter.
@@ -304,6 +311,7 @@ function contentSuggestion(route: ContentRoute, rawValue: string): ToolSearchSug
     reason: route.reason,
     value: rawValue,
     fieldKey: route.fieldKey,
+    presetValues: route.presetValues,
   }
 }
 

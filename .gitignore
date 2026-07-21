@@ -6,9 +6,8 @@ dist/
 coverage/
 *.tsbuildinfo
 
-# Generated offline documentation and caches
+# Generated caches
 .cache/
-public/offline-docs/
 
 # Logs
 logs/

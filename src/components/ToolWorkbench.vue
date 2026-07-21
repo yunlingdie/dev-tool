@@ -22,8 +22,8 @@ const values = reactive<ToolValues>(
   Object.fromEntries(props.tool.fields.map((field) => [field.key, field.defaultValue])),
 )
 
-/** Applies the latest search handoff to the declared text field of this cached workbench. */
-function applyCurrentPrefill(): void {
+/** Applies the latest search handoff and immediately processes the transferred value. */
+async function applyCurrentPrefill(): Promise<void> {
   const prefill = props.prefill
 
   // Direct navigation and option-only tools do not provide a search handoff.
@@ -43,10 +43,36 @@ function applyCurrentPrefill(): void {
     return
   }
 
-  values[field.key] = prefill.value
-}
+  // Content recognition can pin direction fields required for deterministic automatic handling.
+  if (prefill.presetValues) {
+    for (const [key, presetValue] of Object.entries(prefill.presetValues)) {
+      const presetField = props.tool.fields.find((candidate) => candidate.key === key)
 
-watch(() => props.prefill?.revision, applyCurrentPrefill, { immediate: true })
+      // Search metadata must not create fields missing from the selected tool definition.
+      if (!presetField) {
+        continue
+      }
+
+      values[presetField.key] = presetValue
+    }
+  }
+
+  values[field.key] = prefill.value
+
+  // A later title search cancels any queued content run and waits for explicit user action.
+  if (!prefill.autoRun) {
+    pendingAutoRun = false
+    return
+  }
+
+  // A newer content handoff should run once the current async execution has settled.
+  if (isRunning.value) {
+    pendingAutoRun = true
+    return
+  }
+
+  await runTool()
+}
 
 /** Creates the empty output state declared by the selected tool. */
 function createInitialResult(): ToolResult {
@@ -64,6 +90,7 @@ function createInitialResult(): ToolResult {
 const result = ref<ToolResult>(createInitialResult())
 const error = ref('')
 const isRunning = ref(false)
+let pendingAutoRun = false
 const copiedOutputIndex = ref<number | null>(null)
 const copiedItemKey = ref('')
 
@@ -106,28 +133,47 @@ function generatedItemKey(outputIndex: number, itemIndex: number): string {
 
 /** Executes the current tool and converts thrown values into a visible error state. */
 async function runTool(): Promise<void> {
-  // A running async generator should not be started twice from repeated clicks.
+  // Repeated manual clicks are ignored; search handoffs queue through applyCurrentPrefill.
   if (isRunning.value) {
     return
   }
 
   isRunning.value = true
   error.value = ''
+  const executionValues = { ...values }
+  const executionPrefillRevision = props.prefill?.revision
 
   try {
-    result.value = await props.tool.execute(values)
+    const nextResult = await props.tool.execute(executionValues)
+
+    // A result belongs on screen only while its search handoff is still the latest one.
+    if (executionPrefillRevision === props.prefill?.revision) {
+      result.value = nextResult
+    }
   } catch (caught) {
-    // Native Error instances retain the most useful parser or validation detail.
-    if (caught instanceof Error) {
-      error.value = caught.message
-    } else {
-      // Non-Error throws still need a readable fallback in the workbench.
-      error.value = String(caught)
+    // Errors from superseded searches must not replace feedback for the newer input.
+    if (executionPrefillRevision === props.prefill?.revision) {
+      // Native Error instances retain the most useful parser or validation detail.
+      if (caught instanceof Error) {
+        error.value = caught.message
+      } else {
+        // Non-Error throws still need a readable fallback in the workbench.
+        error.value = String(caught)
+      }
     }
   } finally {
+    const shouldRunPendingSearch = pendingAutoRun
+    pendingAutoRun = false
     isRunning.value = false
+
+    // Multiple handoffs received during one run collapse into one execution of the latest value.
+    if (shouldRunPendingSearch) {
+      await runTool()
+    }
   }
 }
+
+watch(() => props.prefill?.revision, applyCurrentPrefill, { immediate: true })
 
 /** Copies one named output and briefly confirms the completed action. */
 async function copyOutput(item: ToolOutput, index: number): Promise<void> {

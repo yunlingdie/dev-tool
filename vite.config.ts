@@ -6,13 +6,6 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     allowedHosts: ['web.dev-tool.orb.local'],
-    watch: {
-      ignored: [
-        '**/.cache/offline-docs-staging/**',
-        '**/.cache/offline-docs-releases/**',
-        '**/public/offline-docs/**',
-      ],
-    },
   },
   // php-parser checks the host word size through Node's process.arch global.
   define: {

@@ -47,6 +47,13 @@ describe('tool search suggestions', () => {
     expect(suggestionIds('www.example.com')).toEqual([])
   })
 
+  it('pins Docker Run content to the matching conversion direction', () => {
+    const suggestion = getToolSearchSuggestions('docker run --rm nginx')[0]
+
+    expect(suggestion?.tool.id).toBe('docker-converter')
+    expect(suggestion?.presetValues).toEqual({ direction: 'run-to-compose' })
+  })
+
   it.each([
     ['curl https://example.com', 'curl-fetch', 'input'],
     ['https://example.com/path?q=1', 'url-parser', 'input'],
@@ -69,6 +76,7 @@ describe('tool search suggestions', () => {
       'curl https://example.com',
       'https://example.com',
       '<root />',
+      'docker run --rm nginx',
       'SELECT 1',
       'PHP 数组转 JSON',
     ]
@@ -83,6 +91,10 @@ describe('tool search suggestions', () => {
         const field = suggestion.tool.fields.find((candidate) => candidate.key === suggestion.fieldKey)
         expect(field).toBeDefined()
         expect(['text', 'textarea']).toContain(field?.type)
+
+        for (const presetKey of Object.keys(suggestion.presetValues ?? {})) {
+          expect(suggestion.tool.fields.some((candidate) => candidate.key === presetKey)).toBe(true)
+        }
       }
     }
   })

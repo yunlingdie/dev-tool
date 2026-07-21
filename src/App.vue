@@ -1,44 +1,21 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { BookOpenText, Code2, Menu, Search, Wrench, X } from '@lucide/vue'
+import { Code2, Menu, Search, X } from '@lucide/vue'
 
-import DocumentsView from './components/DocumentsView.vue'
 import ToolSearchDialog from './components/ToolSearchDialog.vue'
 import ToolWorkbench from './components/ToolWorkbench.vue'
-import { documents } from './docs/definitions'
 import { categories, findTool, tools } from './tools/definitions'
 import type { ToolSearchSuggestion } from './tools/search'
 import type { ToolDefinition, ToolPrefill } from './tools/types'
 
-type AppSection = 'tools' | 'documents'
-
-const DOCUMENTS_ROUTE = 'docs'
+const MAX_TOOL_HISTORY = 10
 
 /** Reads the application path from the URL fragment without retaining the hash marker. */
 function routePath(): string {
   return window.location.hash.replace(/^#\/?/, '')
 }
 
-/** Maps the reserved document route to its workspace while preserving all tool routes. */
-function sectionForRoute(path: string): AppSection {
-  // Only the exact reserved path should leave the existing tool workspace.
-  if (path === DOCUMENTS_ROUTE) {
-    return 'documents'
-  }
-
-  return 'tools'
-}
-
-const initialRoutePath = routePath()
-const activeSection = ref<AppSection>(sectionForRoute(initialRoutePath))
-let initialToolId = initialRoutePath
-
-// The document route should retain the deterministic default tool for a later workspace switch.
-if (activeSection.value === 'documents') {
-  initialToolId = ''
-}
-
-const selectedTool = ref(findTool(initialToolId))
+const selectedTool = ref(findTool(routePath()))
 const openedTools = ref<ToolDefinition[]>([selectedTool.value])
 const toolPrefills = reactive<Record<string, ToolPrefill>>({})
 const searchDialogOpen = ref(false)
@@ -50,19 +27,34 @@ function toolsForCategory(categoryId: string): ToolDefinition[] {
   return tools.filter((tool) => tool.category.id === categoryId)
 }
 
-/** Adds a tool to the session history once while preserving first-open order. */
+/** Records a tool as most recently used and removes entries beyond the session limit. */
 function rememberTool(tool: ToolDefinition): void {
-  // Reopening a tool should activate its existing workbench instead of duplicating history.
-  if (openedTools.value.some((openedTool) => openedTool.id === tool.id)) {
-    return
+  const existingIndex = openedTools.value.findIndex((openedTool) => openedTool.id === tool.id)
+
+  // Reusing a tool moves its single history entry to the most-recent position.
+  if (existingIndex >= 0) {
+    openedTools.value.splice(existingIndex, 1)
   }
 
   openedTools.value.push(tool)
+
+  // History at or below the limit needs no cache cleanup.
+  if (openedTools.value.length <= MAX_TOOL_HISTORY) {
+    return
+  }
+
+  const expiredTools = openedTools.value.splice(
+    0,
+    openedTools.value.length - MAX_TOOL_HISTORY,
+  )
+
+  for (const expiredTool of expiredTools) {
+    delete toolPrefills[expiredTool.id]
+  }
 }
 
 /** Selects a tool, updates the shareable URL, and closes the mobile drawer. */
 function selectTool(tool: ToolDefinition): void {
-  activeSection.value = 'tools'
   selectedTool.value = tool
   rememberTool(tool)
   mobileNavigationOpen.value = false
@@ -93,6 +85,9 @@ function selectSearchSuggestion(suggestion: ToolSearchSuggestion): void {
       fieldKey: suggestion.fieldKey,
       value: suggestion.value,
       revision: prefillRevision,
+      // Detected content is actionable; ordinary title queries should not execute as source data.
+      autoRun: suggestion.kind === 'content',
+      presetValues: suggestion.presetValues,
     }
   }
 
@@ -100,33 +95,15 @@ function selectSearchSuggestion(suggestion: ToolSearchSuggestion): void {
   selectTool(suggestion.tool)
 }
 
-/** Switches between the independent tool and document workspaces. */
-function selectSection(section: AppSection): void {
-  activeSection.value = section
-  mobileNavigationOpen.value = false
-  let targetPath = selectedTool.value.id
-
-  // The document workspace currently has one stable top-level route.
-  if (section === 'documents') {
-    targetPath = DOCUMENTS_ROUTE
-  }
-
-  // Replacing only changed fragments avoids redundant browser history mutations.
-  if (routePath() !== targetPath) {
-    window.history.replaceState(null, '', `#/${targetPath}`)
-  }
-}
-
 /** Synchronizes browser fragment navigation with the active tool. */
 function handleHashChange(): void {
-  const path = routePath()
-  activeSection.value = sectionForRoute(path)
+  const tool = findTool(routePath())
+  selectedTool.value = tool
+  rememberTool(tool)
 
-  // Document navigation must not overwrite the tool remembered for returning users.
-  if (activeSection.value === 'tools') {
-    const tool = findTool(path)
-    selectedTool.value = tool
-    rememberTool(tool)
+  // Removed or unknown routes must expose the actual fallback tool in the URL.
+  if (routePath() !== tool.id) {
+    window.history.replaceState(null, '', `#/${tool.id}`)
   }
 }
 
@@ -134,8 +111,8 @@ function handleHashChange(): void {
 onMounted(() => {
   window.addEventListener('hashchange', handleHashChange)
 
-  // A bare initial URL receives a deterministic tool fragment for refresh and sharing.
-  if (!routePath()) {
+  // Bare, removed, and unknown routes resolve to the selected fallback tool.
+  if (routePath() !== selectedTool.value.id) {
     window.history.replaceState(null, '', `#/${selectedTool.value.id}`)
   }
 })
@@ -175,35 +152,8 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <!-- Active styling makes the two independent workspaces explicit. -->
-      <nav class="workspace-switcher" aria-label="工作区">
-        <button
-          type="button"
-          class="workspace-switch"
-          :class="{ 'workspace-switch--active': activeSection === 'tools' }"
-          :aria-pressed="activeSection === 'tools'"
-          @click="selectSection('tools')"
-        >
-          <Wrench :size="15" aria-hidden="true" />
-          <span>工具</span>
-          <span class="workspace-count">{{ tools.length }}</span>
-        </button>
-        <button
-          type="button"
-          class="workspace-switch"
-          :class="{ 'workspace-switch--active': activeSection === 'documents' }"
-          :aria-pressed="activeSection === 'documents'"
-          @click="selectSection('documents')"
-        >
-          <BookOpenText :size="15" aria-hidden="true" />
-          <span>文档</span>
-          <span class="workspace-count">{{ documents.length }}</span>
-        </button>
-      </nav>
-
-      <!-- Tool search opens a content-aware command dialog from the tool workspace. -->
+      <!-- Tool search opens a content-aware command dialog. -->
       <button
-        v-if="activeSection === 'tools'"
         type="button"
         class="search-trigger"
         @click="openToolSearch"
@@ -212,8 +162,7 @@ onBeforeUnmount(() => {
         <span>搜索工具</span>
       </button>
 
-      <!-- Tool categories never mix with the independent document registry. -->
-      <nav v-if="activeSection === 'tools'" class="tool-navigation" aria-label="开发工具">
+      <nav class="tool-navigation" aria-label="开发工具">
         <section v-for="category in categories" :key="category.id" class="nav-section">
           <h2>{{ category.label }}</h2>
           <button
@@ -230,13 +179,6 @@ onBeforeUnmount(() => {
           </button>
         </section>
       </nav>
-
-      <!-- The document sidebar stays intentionally minimal until real content exists. -->
-      <div v-else class="document-sidebar-summary">
-        <BookOpenText :size="19" aria-hidden="true" />
-        <strong>文档</strong>
-        <span>{{ documents.length }} 篇</span>
-      </div>
     </aside>
 
     <main class="main-area">
@@ -251,27 +193,16 @@ onBeforeUnmount(() => {
           <Menu :size="19" aria-hidden="true" />
         </button>
 
-        <!-- Tool routes retain their existing category and title heading. -->
-        <div v-if="activeSection === 'tools'" class="tool-heading">
+        <div class="tool-heading">
           <span>{{ selectedTool.category.label }}</span>
           <h1>{{ selectedTool.title }}</h1>
         </div>
 
-        <!-- The document route has a heading independent from tool definitions. -->
-        <div v-else class="tool-heading">
-          <span>文档库</span>
-          <h1>文档</h1>
-        </div>
-
-        <!-- Tool processing status applies only to executable tools. -->
-        <div v-if="activeSection === 'tools'" class="local-status"><span aria-hidden="true" />本地处理</div>
-
-        <!-- Document status reports registry size without implying tool execution. -->
-        <div v-else class="local-status document-status"><BookOpenText :size="14" aria-hidden="true" />{{ documents.length }} 篇</div>
+        <div class="local-status"><span aria-hidden="true" />本地处理</div>
       </header>
 
-      <!-- Session history keeps every opened workbench directly reachable without resetting it. -->
-      <nav v-if="activeSection === 'tools'" class="tool-history" aria-label="工具历史">
+      <!-- Bounded session history keeps the most recently used workbenches directly reachable. -->
+      <nav class="tool-history" aria-label="工具历史">
         <span class="tool-history-label">历史</span>
         <div class="tool-history-items">
           <button
@@ -291,17 +222,13 @@ onBeforeUnmount(() => {
 
       <div class="content-frame">
         <!-- Keyed workbenches stay cached so each history entry retains form and result state. -->
-        <KeepAlive>
+        <KeepAlive :max="MAX_TOOL_HISTORY">
           <ToolWorkbench
-            v-if="activeSection === 'tools'"
             :key="selectedTool.id"
             :tool="selectedTool"
             :prefill="toolPrefills[selectedTool.id]"
           />
         </KeepAlive>
-
-        <!-- Documents use their own filter and rendering surface. -->
-        <DocumentsView v-if="activeSection === 'documents'" :documents="documents" />
       </div>
     </main>
 
