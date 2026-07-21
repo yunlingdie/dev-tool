@@ -1,5 +1,7 @@
 import type { Component } from 'vue'
 
+import type { AudioAnalysis } from '../lib/audio'
+
 export type ToolValue = string | number | boolean | File | null
 export type ToolValues = Record<string, ToolValue>
 
@@ -17,6 +19,7 @@ export interface ToolField {
   options?: ToolOption[]
   min?: number
   max?: number
+  accept?: string
   wide?: boolean
   showWhen?: {
     key: string
@@ -33,6 +36,7 @@ export interface ToolResult {
   mimeType?: string
   downloadHref?: string
   outputs?: ToolOutput[]
+  audio?: AudioAnalysis
 }
 
 export interface ToolOutput {

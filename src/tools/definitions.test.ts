@@ -15,6 +15,7 @@ const expectedToolIds = [
   'base64-string',
   'base32-base58',
   'base64-file',
+  'audio-parser',
   'ascii-binary',
   'unicode',
   'yaml-json',
@@ -90,6 +91,19 @@ describe('tool registry', () => {
     await expect(Promise.resolve(dockerTool.execute(defaultValues(dockerTool)))).resolves.toMatchObject({
       output: expect.stringContaining('services:'),
     })
+  })
+
+  it('registers audio parsing as an audio-only local file tool', async () => {
+    const audioTool = toolById('audio-parser')
+
+    expect(audioTool.fields).toEqual([
+      expect.objectContaining({
+        key: 'file',
+        type: 'file',
+        accept: 'audio/*',
+      }),
+    ])
+    await expect(audioTool.execute(defaultValues(audioTool))).rejects.toThrow('请先选择文件')
   })
 
   it('renders date conversion as separately copyable Chinese rows', async () => {

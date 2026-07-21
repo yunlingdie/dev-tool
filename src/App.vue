@@ -271,6 +271,7 @@ onBeforeUnmount(() => {
           :key="tool.id"
           :tool="tool"
           :prefill="toolPrefills[tool.id]"
+          :active="selectedTool.id === tool.id"
         />
       </div>
     </main>

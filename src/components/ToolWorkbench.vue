@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { Check, Copy, Download, LoaderCircle, Play } from '@lucide/vue'
 
+import AudioAnalysisViewer from './AudioAnalysisViewer.vue'
 import JsonCodeViewer from './JsonCodeViewer.vue'
 import type {
   ToolDefinition,
@@ -16,6 +17,7 @@ import type {
 const props = defineProps<{
   tool: ToolDefinition
   prefill?: ToolPrefill
+  active: boolean
 }>()
 
 const values = reactive<ToolValues>(
@@ -332,6 +334,7 @@ function updateValue(field: ToolField, event: Event): void {
             v-else-if="field.type === 'file'"
             :id="`${tool.id}-${field.key}`"
             type="file"
+            :accept="field.accept"
             @change="updateFile(field, $event)"
           >
 
@@ -372,6 +375,13 @@ function updateValue(field: ToolField, event: Event): void {
     </form>
 
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+
+    <!-- Audio results use one shared native player and interactive waveform. -->
+    <AudioAnalysisViewer
+      v-if="result.audio"
+      :analysis="result.audio"
+      :active="active"
+    />
 
     <div class="output-list">
       <section

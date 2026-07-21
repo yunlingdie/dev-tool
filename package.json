@@ -28,6 +28,7 @@
     "ulid": "^3.0.2",
     "uuid": "^14.0.1",
     "vue": "^3.5.40",
+    "wavesurfer.js": "^7.12.11",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

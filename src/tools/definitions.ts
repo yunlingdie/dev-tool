@@ -1,4 +1,5 @@
 import {
+  AudioLines,
   BadgeCheck,
   Binary,
   Braces,
@@ -48,6 +49,14 @@ import {
   yamlToToml,
 } from '../lib/advanced'
 import type { DiffPart, MacAddressOptions, SqlDialect } from '../lib/advanced'
+import {
+  analyzeAudioFile,
+  audioFileFormat,
+  audioMimeType,
+  formatAudioChannelCount,
+  formatAudioDuration,
+  formatAudioFileSize,
+} from '../lib/audio'
 import {
   analyzeUrl,
   asciiBinaryToText,
@@ -355,6 +364,28 @@ async function convertBase64File(values: ToolValues): Promise<ToolResult> {
   }
 }
 
+/** Parses a local audio file into playable media, waveform peaks, and Chinese metadata rows. */
+async function analyzeAudioTool(values: ToolValues): Promise<ToolResult> {
+  const analysis = await analyzeAudioFile(fileValue(values, 'file'))
+  const items = [
+    { label: '文件名', value: analysis.file.name },
+    { label: '格式', value: audioFileFormat(analysis.file) },
+    { label: 'MIME 类型', value: audioMimeType(analysis.file) },
+    { label: '文件大小', value: formatAudioFileSize(analysis.file.size) },
+    { label: '时长', value: formatAudioDuration(analysis.durationSeconds) },
+    { label: '采样率', value: `${analysis.sampleRate.toLocaleString('zh-CN')} Hz` },
+    { label: '声道数', value: formatAudioChannelCount(analysis.channelCount) },
+    { label: '采样帧数', value: analysis.frameCount.toLocaleString('zh-CN') },
+  ]
+
+  return {
+    output: items.map(({ label, value }) => `${label}: ${value}`).join('\n'),
+    items: items.map(({ value }) => value),
+    itemLabels: items.map(({ label }) => label),
+    audio: analysis,
+  }
+}
+
 /** Generates locally administered MAC addresses with requested presentation options. */
 function generateMac(values: ToolValues): ToolResult {
   const options: MacAddressOptions = {
@@ -492,6 +523,15 @@ export const tools: ToolDefinition[] = [
       { key: 'filename', label: '文件名', type: 'text', defaultValue: 'decoded.bin', showWhen: { key: 'direction', value: 'decode' } },
       { key: 'mimeType', label: 'MIME 类型', type: 'text', defaultValue: 'application/octet-stream', showWhen: { key: 'direction', value: 'decode' } },
     ], actionLabel: '转换文件', execute: convertBase64File,
+  },
+  {
+    id: 'audio-parser', title: '音频解析', category: categoryById.encode, icon: AudioLines,
+    fields: [
+      { key: 'file', label: '音频文件', type: 'file', defaultValue: null, accept: 'audio/*', wide: true },
+    ],
+    actionLabel: '解析音频',
+    outputLabel: '基础信息',
+    execute: analyzeAudioTool,
   },
   {
     id: 'ascii-binary', title: '文本到 ASCII 二进制', category: categoryById.encode, icon: Binary,
