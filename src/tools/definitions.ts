@@ -420,6 +420,18 @@ function convertDocker(values: ToolValues): ToolResult {
 
 export const tools: ToolDefinition[] = [
   {
+    id: 'md5',
+    title: 'MD5 计算',
+    category: categoryById.encode,
+    icon: Hash,
+    fields: [
+      { key: 'input', label: '文本', type: 'textarea', defaultValue: '', placeholder: '输入需要计算 MD5 的文本', wide: true },
+    ],
+    actionLabel: '计算 MD5',
+    // Calculates a browser-local MD5 digest for the supplied UTF-8 text.
+    execute: async (values) => output(await hashText(textValue(values, 'input'), 'MD5')),
+  },
+  {
     id: 'hash-text',
     title: 'Hash 文本',
     category: categoryById.encode,
@@ -478,7 +490,7 @@ export const tools: ToolDefinition[] = [
     fields: [
       { key: 'input', label: '日期或时间戳', type: 'text', defaultValue: new Date().toISOString(), placeholder: 'ISO 日期、Unix 秒或毫秒', wide: true },
       { key: 'timeZone', label: '目标时区', type: 'select', defaultValue: 'Asia/Shanghai', options: ['Asia/Shanghai', 'UTC', 'Asia/Tokyo', 'Europe/London', 'America/New_York'].map((value) => ({ label: value, value })) },
-    ], actionLabel: '转换时间', execute: convertDateTool,
+    ], actionLabel: '转换时间', autoRun: true, execute: convertDateTool,
   },
   {
     id: 'base-converter', title: '进制转换', category: categoryById.text, icon: Binary,

@@ -61,6 +61,11 @@ async function applyCurrentPrefill(): Promise<void> {
 
   values[field.key] = prefill.value
 
+  // Field-driven tools rerun through their value watcher, avoiding a duplicate search execution.
+  if (props.tool.autoRun) {
+    return
+  }
+
   // A later title search cancels any queued content run and waits for explicit user action.
   if (!prefill.autoRun) {
     pendingAutoRun = false
@@ -180,18 +185,35 @@ async function runTool(): Promise<void> {
       }
     }
   } finally {
-    const shouldRunPendingSearch = pendingAutoRun
+    const shouldRunPendingAutoRun = pendingAutoRun
     pendingAutoRun = false
     isRunning.value = false
 
-    // Multiple handoffs received during one run collapse into one execution of the latest value.
-    if (shouldRunPendingSearch) {
+    // Multiple automatic triggers received during one run collapse into one execution of the latest value.
+    if (shouldRunPendingAutoRun) {
       await runTool()
     }
   }
 }
 
+/** Schedules automatic tools after input changes while retaining only the latest pending values. */
+function runAutomaticTool(): void {
+  // Manual tools require an explicit command because incomplete inputs should not run eagerly.
+  if (!props.tool.autoRun) {
+    return
+  }
+
+  // An active execution must finish before the newest field state can be processed.
+  if (isRunning.value) {
+    pendingAutoRun = true
+    return
+  }
+
+  void runTool()
+}
+
 watch(() => props.prefill?.revision, applyCurrentPrefill, { immediate: true })
+watch(values, runAutomaticTool, { deep: true, immediate: true })
 
 /** Copies one named output and briefly confirms the completed action. */
 async function copyOutput(item: ToolOutput, index: number): Promise<void> {
@@ -363,7 +385,8 @@ function updateValue(field: ToolField, event: Event): void {
         </div>
       </div>
 
-      <div class="action-row">
+      <!-- Field-driven tools execute on every edit, so their submit control is unnecessary. -->
+      <div v-if="!tool.autoRun" class="action-row">
         <button class="primary-action" type="submit" :disabled="isRunning">
           <!-- Running tools use motion to communicate that the command is still active. -->
           <LoaderCircle v-if="isRunning" :size="17" class="spin" aria-hidden="true" />

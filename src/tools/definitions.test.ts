@@ -5,6 +5,7 @@ import { tools } from './definitions'
 import type { ToolDefinition, ToolValues } from './types'
 
 const expectedToolIds = [
+  'md5',
   'hash-text',
   'uuid',
   'ulid',
@@ -76,11 +77,16 @@ describe('tool registry', () => {
   })
 
   it('executes representative text, format, network, and Docker tools', async () => {
+    const md5Tool = toolById('md5')
     const baseTool = toolById('base-converter')
     const yamlTool = toolById('yaml-json')
     const subnetTool = toolById('ipv4-subnet')
     const dockerTool = toolById('docker-converter')
 
+    // The dedicated MD5 route must use the standard digest for a known UTF-8 input.
+    expect(await Promise.resolve(md5Tool.execute({ input: 'abc' }))).toMatchObject({
+      output: '900150983cd24fb0d6963f7d28e17f72',
+    })
     await expect(Promise.resolve(baseTool.execute(defaultValues(baseTool)))).resolves.toMatchObject({ output: 'ff' })
     await expect(Promise.resolve(yamlTool.execute(defaultValues(yamlTool)))).resolves.toMatchObject({
       output: expect.stringContaining('"name": "dev-tool"'),
@@ -113,6 +119,8 @@ describe('tool registry', () => {
     values.timeZone = 'Asia/Shanghai'
     const result = await Promise.resolve(dateTool.execute(values))
 
+    // Date conversion must declare its field-driven execution contract for the workbench.
+    expect(dateTool.autoRun).toBe(true)
     expect(result).toEqual({
       output: [
         'ISO 时间: 1970-01-01T00:00:00.000Z',
