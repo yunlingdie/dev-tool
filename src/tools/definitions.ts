@@ -666,7 +666,7 @@ export const tools: ToolDefinition[] = [
     fields: [
       { key: 'spaces', label: '缩进空格', type: 'select', defaultValue: '2', options: [{ label: '2 spaces', value: '2' }, { label: '4 spaces', value: '4' }] },
       { key: 'input', label: 'JSON', type: 'textarea', defaultValue: '{"name":"dev-tool","active":true}', wide: true },
-    ], actionLabel: '格式化 JSON', execute: (values) => jsonOutput(formatJson(textValue(values, 'input'), numberValue(values, 'spaces'))),
+    ], actionLabel: '格式化 JSON', autoRun: true, execute: (values) => jsonOutput(formatJson(textValue(values, 'input'), numberValue(values, 'spaces'))),
   },
   {
     id: 'json-minify', title: 'JSON 压缩', category: categoryById.data, icon: Braces,

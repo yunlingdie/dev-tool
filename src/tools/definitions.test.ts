@@ -196,6 +196,10 @@ describe('tool registry', () => {
   })
 
   it('marks JSON-producing tools for syntax-aware output rendering', async () => {
+    const jsonFormatTool = toolById('json-format')
+
+    // JSON formatting must declare its field-driven execution contract for the workbench.
+    expect(jsonFormatTool.autoRun).toBe(true)
     for (const toolId of ['json-format', 'yaml-json', 'toml-json', 'xml-json', 'php-array-json', 'url-parser']) {
       const jsonTool = toolById(toolId)
       const result = await Promise.resolve(jsonTool.execute(defaultValues(jsonTool)))
