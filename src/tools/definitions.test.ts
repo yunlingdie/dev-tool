@@ -42,6 +42,7 @@ const expectedToolIds = [
   'sql-format',
   'docker-converter',
   'curl-fetch',
+  'request-fetch',
   'xml-format',
   'yaml-format',
   'regex-tester',
@@ -218,15 +219,19 @@ describe('tool registry', () => {
     expect(JSON.parse(jsonResult.output)).toMatchObject({ name: 'dev-tool', active: true })
   })
 
-  it('executes the Base32/Base58 and cURL-to-Fetch tools through the registry', async () => {
+  it('executes the Base32/Base58 and Fetch conversion tools through the registry', async () => {
     const baseTool = toolById('base32-base58')
     const curlTool = toolById('curl-fetch')
+    const requestTool = toolById('request-fetch')
     const baseResult = await Promise.resolve(baseTool.execute(defaultValues(baseTool)))
     const curlResult = await Promise.resolve(curlTool.execute(defaultValues(curlTool)))
+    const requestResult = await Promise.resolve(requestTool.execute(defaultValues(requestTool)))
 
     expect(baseResult.output).toBe('IRSXMICUN5XWYYTPPA======')
     expect(curlResult.output).toContain("fetch('https://api.example.com/users'")
     expect(curlResult.output).toContain("method: 'POST'")
+    expect(requestResult.output).toContain('fetch("https://api.example.com/users"')
+    expect(requestResult.output).toContain('method: "POST"')
   })
 
   it('returns RSA public and private keys as two named outputs', async () => {

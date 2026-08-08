@@ -89,6 +89,7 @@ import {
   generateRsaKeyPair,
 } from '../lib/special'
 import type { BaseTextEncoding } from '../lib/base-encodings'
+import type { FetchMethod } from '../lib/fetch-request'
 import type { RsaModulusLength } from '../lib/special'
 import type { ToolCategory, ToolDefinition, ToolResult, ToolValues } from './types'
 
@@ -291,6 +292,17 @@ async function verifyCertificateKeyTool(values: ToolValues): Promise<ToolResult>
 async function convertCurlToFetch(values: ToolValues): Promise<ToolResult> {
   const { curlToFetch } = await import('../lib/curl-fetch')
   return output(curlToFetch(textValue(values, 'input')))
+}
+
+/** Generates Fetch source from separately entered URL, body, and method fields. */
+async function convertRequestToFetch(values: ToolValues): Promise<ToolResult> {
+  const { buildFetchRequest } = await import('../lib/fetch-request')
+
+  return output(buildFetchRequest({
+    url: textValue(values, 'url'),
+    body: textValue(values, 'body'),
+    method: textValue(values, 'method') as FetchMethod,
+  }))
 }
 
 const uuidHandlers: Record<string, () => string> = {
@@ -696,6 +708,16 @@ export const tools: ToolDefinition[] = [
     id: 'curl-fetch', title: 'cURL 转 Fetch', category: categoryById.developer, icon: SquareTerminal,
     fields: [{ key: 'input', label: 'cURL 命令', type: 'textarea', defaultValue: `curl 'https://api.example.com/users' -H 'Content-Type: application/json' --data-raw '{"name":"Ada"}'`, wide: true }],
     actionLabel: '转换为 Fetch', execute: convertCurlToFetch,
+  },
+  {
+    id: 'request-fetch', title: 'URL / Body / Method 转 Fetch', category: categoryById.developer, icon: SquareTerminal,
+    fields: [
+      { key: 'url', label: 'URL', type: 'text', defaultValue: 'https://api.example.com/users', placeholder: 'https://api.example.com/users', wide: true },
+      { key: 'method', label: 'Method', type: 'select', defaultValue: 'POST', options: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].map((value) => ({ label: value, value })) },
+      { key: 'body', label: 'Body', type: 'textarea', defaultValue: '{"name":"Ada"}', placeholder: 'JSON 或纯文本 Body', wide: true },
+    ],
+    actionLabel: '生成 Fetch',
+    execute: convertRequestToFetch,
   },
   {
     id: 'xml-format', title: 'XML 格式化', category: categoryById.data, icon: FileCode2,
