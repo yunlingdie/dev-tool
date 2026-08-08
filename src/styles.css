@@ -517,11 +517,27 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.tool-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.language-picker select {
+  min-height: 34px;
+  padding: 6px 28px 6px 9px;
+  color: var(--foreground);
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
 .local-status {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-left: auto;
   color: var(--muted);
   font-size: 12px;
   white-space: nowrap;

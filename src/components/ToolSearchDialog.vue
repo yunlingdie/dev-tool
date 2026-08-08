@@ -2,8 +2,10 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowRight, Search, X } from '@lucide/vue'
 
+import { language, localizeTool, t, translateText } from '../lib/i18n'
 import { getToolSearchSuggestions } from '../tools/search'
 import type { ToolSearchSuggestion } from '../tools/search'
+import type { ToolDefinition } from '../tools/types'
 
 const props = defineProps<{
   open: boolean
@@ -19,6 +21,16 @@ const searchInput = ref<HTMLTextAreaElement | null>(null)
 const query = ref('')
 const activeSuggestionIndex = ref(0)
 
+/** Returns the localized display definition for one search suggestion. */
+function displaySuggestionTool(suggestion: ToolSearchSuggestion): ToolDefinition {
+  return localizeTool(suggestion.tool, language.value)
+}
+
+/** Returns a localized explanation for one content-aware or catalog search result. */
+function displaySuggestionReason(suggestion: ToolSearchSuggestion): string {
+  return translateText(suggestion.reason, language.value)
+}
+
 /** Produces content-aware actions or ordinary catalog matches for the current value. */
 const suggestions = computed(() => getToolSearchSuggestions(query.value))
 
@@ -26,15 +38,15 @@ const suggestions = computed(() => getToolSearchSuggestions(query.value))
 const resultLabel = computed(() => {
   // Blank search is a browsable catalog rather than a filtered result set.
   if (!query.value.trim()) {
-    return '全部工具'
+    return t('allTools')
   }
 
   // Content matches are actions inferred from the pasted value.
   if (suggestions.value[0]?.kind === 'content') {
-    return '建议操作'
+    return t('suggestedActions')
   }
 
-  return '搜索结果'
+  return t('searchResults')
 })
 
 /** Exposes the highlighted option to assistive technology while results exist. */
@@ -185,14 +197,14 @@ function chooseSuggestion(suggestion: ToolSearchSuggestion): void {
     <section class="tool-search-panel">
       <header class="tool-search-header">
         <div>
-          <span>快速打开</span>
-          <h2 id="tool-search-title">搜索工具</h2>
+          <span>{{ t('quickOpen') }}</span>
+          <h2 id="tool-search-title">{{ t('searchTools') }}</h2>
         </div>
         <button
           type="button"
           class="icon-button"
-          aria-label="关闭搜索"
-          data-tooltip="关闭搜索"
+          :aria-label="t('closeSearch')"
+          :data-tooltip="t('closeSearch')"
           @click="requestClose"
         >
           <X :size="18" aria-hidden="true" />
@@ -201,12 +213,12 @@ function chooseSuggestion(suggestion: ToolSearchSuggestion): void {
 
       <label class="tool-search-input">
         <Search :size="18" aria-hidden="true" />
-        <span class="sr-only">搜索工具或输入待处理内容</span>
+        <span class="sr-only">{{ t('searchToolsOrPaste') }}</span>
         <textarea
           ref="searchInput"
           v-model="query"
           rows="3"
-          placeholder="搜索工具或粘贴内容"
+          :placeholder="t('searchToolsOrPaste')"
           autocomplete="off"
           spellcheck="false"
           aria-controls="tool-search-results"
@@ -242,18 +254,18 @@ function chooseSuggestion(suggestion: ToolSearchSuggestion): void {
           @click="chooseSuggestion(suggestion)"
         >
           <span class="tool-search-result-icon">
-            <component :is="suggestion.tool.icon" :size="17" aria-hidden="true" />
+            <component :is="displaySuggestionTool(suggestion).icon" :size="17" aria-hidden="true" />
           </span>
           <span class="tool-search-result-copy">
-            <strong>{{ suggestion.tool.title }}</strong>
-            <small>{{ suggestion.reason }}</small>
+            <strong>{{ displaySuggestionTool(suggestion).title }}</strong>
+            <small>{{ displaySuggestionReason(suggestion) }}</small>
           </span>
           <ArrowRight :size="16" aria-hidden="true" />
         </button>
       </div>
 
       <!-- Empty feedback occupies the same stable result area as populated searches. -->
-      <p v-else class="tool-search-empty">没有匹配的工具</p>
+      <p v-else class="tool-search-empty">{{ t('noMatchingTools') }}</p>
     </section>
   </dialog>
 </template>

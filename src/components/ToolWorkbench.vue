@@ -4,6 +4,7 @@ import { Check, Copy, Download, LoaderCircle, Play } from '@lucide/vue'
 
 import AudioAnalysisViewer from './AudioAnalysisViewer.vue'
 import JsonCodeViewer from './JsonCodeViewer.vue'
+import { language, t, translateText } from '../lib/i18n'
 import type {
   ToolDefinition,
   ToolField,
@@ -101,6 +102,15 @@ let pendingAutoRun = false
 const copiedOutputIndex = ref<number | null>(null)
 const copiedItemKey = ref('')
 
+/** Localizes labels returned by tool handlers without changing generated content. */
+function localizeOutput(item: ToolOutput): ToolOutput {
+  return {
+    ...item,
+    label: translateText(item.label, language.value),
+    itemLabels: item.itemLabels?.map((label) => translateText(label, language.value)),
+  }
+}
+
 /** Keeps only fields that apply to the currently selected mode. */
 const visibleFields = computed(() =>
   props.tool.fields.filter((field) => {
@@ -117,15 +127,22 @@ const visibleFields = computed(() =>
 const displayedOutputs = computed<ToolOutput[]>(() => {
   // Named outputs are preserved so RSA keys remain separately actionable.
   if (result.value.outputs?.length) {
-    return result.value.outputs
+    return result.value.outputs.map(localizeOutput)
+  }
+
+  let outputLabel = t('output')
+
+  // A tool-specific output label takes precedence over the generic translated label.
+  if (props.tool.outputLabel) {
+    outputLabel = props.tool.outputLabel
   }
 
   return [
     {
-      label: props.tool.outputLabel ?? '输出',
+      label: outputLabel,
       content: result.value.output,
       items: result.value.items,
-      itemLabels: result.value.itemLabels,
+      itemLabels: result.value.itemLabels?.map((label) => translateText(label, language.value)),
       language: result.value.language,
       filename: result.value.filename,
       mimeType: result.value.mimeType,
@@ -313,7 +330,7 @@ function updateValue(field: ToolField, event: Event): void {
 </script>
 
 <template>
-  <section class="workbench" aria-label="工具工作区">
+  <section class="workbench" :aria-label="t('toolWorkspace')">
     <form class="tool-form" @submit.prevent="runTool">
       <div class="field-grid">
         <div
@@ -411,19 +428,19 @@ function updateValue(field: ToolField, event: Event): void {
         v-for="(item, index) in displayedOutputs"
         :key="`${item.label}-${index}`"
         class="output-panel"
-        :aria-label="`${item.label}结果`"
+        :aria-label="`${item.label} ${t('result')}`"
       >
         <header class="output-header">
           <div>
             <span class="output-label">{{ item.label }}</span>
-            <span class="output-meta">{{ item.content.length.toLocaleString() }} chars</span>
+            <span class="output-meta">{{ item.content.length.toLocaleString() }} {{ t('chars') }}</span>
           </div>
           <div class="output-actions">
             <button
               type="button"
               class="icon-button"
-              :data-tooltip="`复制${item.label}`"
-              :aria-label="`复制${item.label}`"
+              :data-tooltip="`${t('copyOutput')}: ${item.label}`"
+              :aria-label="`${t('copyOutput')}: ${item.label}`"
               :disabled="!item.content"
               @click="copyOutput(item, index)"
             >
@@ -435,8 +452,8 @@ function updateValue(field: ToolField, event: Event): void {
             <button
               type="button"
               class="icon-button"
-              :data-tooltip="`下载${item.label}`"
-              :aria-label="`下载${item.label}`"
+              :data-tooltip="`${t('downloadOutput')}: ${item.label}`"
+              :aria-label="`${t('downloadOutput')}: ${item.label}`"
               :disabled="!item.content && !item.downloadHref"
               @click="downloadOutput(item)"
             >
@@ -459,8 +476,8 @@ function updateValue(field: ToolField, event: Event): void {
             <button
               type="button"
               class="icon-button generated-item-copy"
-              data-tooltip="复制此项"
-              :aria-label="`复制第 ${itemIndex + 1} 项`"
+              :data-tooltip="t('copyItem')"
+              :aria-label="t('copyItemNumber').replace('{number}', String(itemIndex + 1))"
               @click="copyGeneratedItem(generatedItem, index, itemIndex)"
             >
               <!-- Successful feedback appears only on the row that was copied. -->
@@ -487,7 +504,7 @@ function updateValue(field: ToolField, event: Event): void {
           :class="diffLineClass(line)"
         >{{ line }}</span></code></pre>
         <!-- Non-list results retain the existing multiline code output. -->
-        <pre v-else><code>{{ item.content || '等待执行' }}</code></pre>
+        <pre v-else><code>{{ item.content || t('waitExecution') }}</code></pre>
       </section>
     </div>
   </section>

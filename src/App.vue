@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { Code2, Menu, Search, X } from '@lucide/vue'
 
 import ToolSearchDialog from './components/ToolSearchDialog.vue'
 import ToolWorkbench from './components/ToolWorkbench.vue'
+import { language, localizeTool, setLanguage, t, translateCategory } from './lib/i18n'
 import { categories, findTool, tools } from './tools/definitions'
 import type { ToolSearchSuggestion } from './tools/search'
 import type { ToolDefinition, ToolPrefill } from './tools/types'
@@ -21,6 +22,16 @@ const toolPrefills = reactive<Record<string, ToolPrefill>>({})
 const searchDialogOpen = ref(false)
 const mobileNavigationOpen = ref(false)
 let prefillRevision = 0
+
+const localizedCategories = computed(() => categories.map((category) => ({
+  ...category,
+  label: translateCategory(category, language.value),
+})))
+
+/** Returns one display-only localized tool while preserving its canonical route and handler. */
+function displayTool(tool: ToolDefinition): ToolDefinition {
+  return localizeTool(tool, language.value)
+}
 
 /** Returns the registered tools belonging to one navigation category. */
 function toolsForCategory(categoryId: string): ToolDefinition[] {
@@ -101,6 +112,19 @@ function openToolSearch(): void {
   searchDialogOpen.value = true
 }
 
+/** Stores the selected website language in the shared persistent language state. */
+function handleLanguageChange(event: Event): void {
+  const select = event.target as HTMLSelectElement
+
+  // Only the English option changes away from the default Chinese interface.
+  if (select.value === 'en') {
+    setLanguage('en')
+    return
+  }
+
+  setLanguage('zh')
+}
+
 /** Closes the global tool search from any native or explicit close action. */
 function closeToolSearch(): void {
   searchDialogOpen.value = false
@@ -160,7 +184,7 @@ onBeforeUnmount(() => {
       v-if="mobileNavigationOpen"
       class="navigation-backdrop"
       type="button"
-      aria-label="关闭导航"
+      :aria-label="t('closeNavigation')"
       @click="mobileNavigationOpen = false"
     />
 
@@ -169,13 +193,13 @@ onBeforeUnmount(() => {
         <div class="brand-mark" aria-hidden="true"><Code2 :size="19" /></div>
         <div>
           <strong>Dev Toolbox</strong>
-          <span>{{ tools.length }} 个本地工具</span>
+          <span>{{ tools.length }} {{ t('localTools') }}</span>
         </div>
         <button
           type="button"
           class="sidebar-close icon-button"
-          aria-label="关闭导航"
-          data-tooltip="关闭导航"
+          :aria-label="t('closeNavigation')"
+          :data-tooltip="t('closeNavigation')"
           @click="mobileNavigationOpen = false"
         >
           <X :size="18" aria-hidden="true" />
@@ -189,11 +213,11 @@ onBeforeUnmount(() => {
         @click="openToolSearch"
       >
         <Search :size="16" aria-hidden="true" />
-        <span>搜索工具</span>
+        <span>{{ t('searchTools') }}</span>
       </button>
 
-      <nav class="tool-navigation" aria-label="开发工具">
-        <section v-for="category in categories" :key="category.id" class="nav-section">
+      <nav class="tool-navigation" :aria-label="t('developerTools')">
+        <section v-for="category in localizedCategories" :key="category.id" class="nav-section">
           <h2>{{ category.label }}</h2>
           <button
             v-for="tool in toolsForCategory(category.id)"
@@ -205,7 +229,7 @@ onBeforeUnmount(() => {
             @click="selectTool(tool)"
           >
             <component :is="tool.icon" :size="16" aria-hidden="true" />
-            <span>{{ tool.title }}</span>
+            <span>{{ displayTool(tool).title }}</span>
           </button>
         </section>
       </nav>
@@ -216,24 +240,37 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="mobile-menu icon-button"
-          aria-label="打开导航"
-          data-tooltip="导航"
+          :aria-label="t('openNavigation')"
+          :data-tooltip="t('navigation')"
           @click="mobileNavigationOpen = true"
         >
           <Menu :size="19" aria-hidden="true" />
         </button>
 
         <div class="tool-heading">
-          <span>{{ selectedTool.category.label }}</span>
-          <h1>{{ selectedTool.title }}</h1>
+          <span>{{ displayTool(selectedTool).category.label }}</span>
+          <h1>{{ displayTool(selectedTool).title }}</h1>
         </div>
 
-        <div class="local-status"><span aria-hidden="true" />本地处理</div>
+        <div class="tool-header-actions">
+          <label class="language-picker">
+            <span class="sr-only">{{ t('websiteLanguage') }}</span>
+            <select
+              :value="language"
+              :aria-label="t('websiteLanguage')"
+              @change="handleLanguageChange"
+            >
+              <option value="zh">{{ t('chinese') }}</option>
+              <option value="en">{{ t('english') }}</option>
+            </select>
+          </label>
+          <div class="local-status"><span aria-hidden="true" />{{ t('localProcessing') }}</div>
+        </div>
       </header>
 
       <!-- Bounded session history keeps stable tabs directly reachable and individually closeable. -->
-      <nav class="tool-history" aria-label="工具历史">
-        <span class="tool-history-label">历史</span>
+      <nav class="tool-history" :aria-label="t('toolHistory')">
+        <span class="tool-history-label">{{ t('history') }}</span>
         <div class="tool-history-items">
           <div
             v-for="tool in openedTools"
@@ -248,13 +285,13 @@ onBeforeUnmount(() => {
               @click="selectTool(tool)"
             >
               <component :is="tool.icon" :size="14" aria-hidden="true" />
-              <span>{{ tool.title }}</span>
+              <span>{{ displayTool(tool).title }}</span>
             </button>
             <button
               type="button"
               class="tool-history-close"
-              :aria-label="`关闭 ${tool.title}`"
-              :data-tooltip="`关闭 ${tool.title}`"
+              :aria-label="`${t('close')} ${displayTool(tool).title}`"
+              :data-tooltip="`${t('close')} ${displayTool(tool).title}`"
               @click="closeHistoryTool(tool)"
             >
               <X :size="13" aria-hidden="true" />
@@ -269,7 +306,7 @@ onBeforeUnmount(() => {
           v-for="tool in openedTools"
           v-show="selectedTool.id === tool.id"
           :key="tool.id"
-          :tool="tool"
+          :tool="displayTool(tool)"
           :prefill="toolPrefills[tool.id]"
           :active="selectedTool.id === tool.id"
         />

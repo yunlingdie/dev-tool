@@ -294,13 +294,14 @@ async function convertCurlToFetch(values: ToolValues): Promise<ToolResult> {
   return output(curlToFetch(textValue(values, 'input')))
 }
 
-/** Generates Fetch source from separately entered URL, body, and method fields. */
+/** Generates Fetch source from separately entered URL, Header, Body, and Method fields. */
 async function convertRequestToFetch(values: ToolValues): Promise<ToolResult> {
   const { buildFetchRequest } = await import('../lib/fetch-request')
 
   return output(buildFetchRequest({
     url: textValue(values, 'url'),
     body: textValue(values, 'body'),
+    headers: textValue(values, 'headers'),
     method: textValue(values, 'method') as FetchMethod,
   }))
 }
@@ -710,10 +711,11 @@ export const tools: ToolDefinition[] = [
     actionLabel: '转换为 Fetch', execute: convertCurlToFetch,
   },
   {
-    id: 'request-fetch', title: 'URL / Body / Method 转 Fetch', category: categoryById.developer, icon: SquareTerminal,
+    id: 'request-fetch', title: 'URL / Headers / Body / Method 转 Fetch', category: categoryById.developer, icon: SquareTerminal,
     fields: [
       { key: 'url', label: 'URL', type: 'text', defaultValue: 'https://api.example.com/users', placeholder: 'https://api.example.com/users', wide: true },
       { key: 'method', label: 'Method', type: 'select', defaultValue: 'POST', options: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].map((value) => ({ label: value, value })) },
+      { key: 'headers', label: 'Headers', type: 'textarea', defaultValue: '{}', placeholder: '{"Authorization":"Bearer token"}', wide: true },
       { key: 'body', label: 'Body', type: 'textarea', defaultValue: '{"name":"Ada"}', placeholder: 'JSON 或纯文本 Body', wide: true },
     ],
     actionLabel: '生成 Fetch',

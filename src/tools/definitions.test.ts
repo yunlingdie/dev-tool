@@ -232,6 +232,7 @@ describe('tool registry', () => {
     expect(curlResult.output).toContain("method: 'POST'")
     expect(requestResult.output).toContain('fetch("https://api.example.com/users"')
     expect(requestResult.output).toContain('method: "POST"')
+    expect(requestResult.output).toContain('"Content-Type": "application/json"')
   })
 
   it('returns RSA public and private keys as two named outputs', async () => {
