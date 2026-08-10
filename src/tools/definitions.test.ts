@@ -11,6 +11,7 @@ const expectedToolIds = [
   'ulid',
   'rsa',
   'date-time',
+  'world-clock',
   'base-converter',
   'roman',
   'base64-string',
@@ -139,6 +140,17 @@ describe('tool registry', () => {
       ],
       itemLabels: ['ISO 时间', 'Unix 秒级时间戳', 'Unix 毫秒级时间戳', '时区', '本地时间'],
     })
+  })
+
+  it('queries featured and matching country clocks with live-refresh metadata', async () => {
+    const worldClockTool = toolById('world-clock')
+    const defaultResult = await Promise.resolve(worldClockTool.execute(defaultValues(worldClockTool)))
+    const matchedResult = await Promise.resolve(worldClockTool.execute({ query: '美国' }))
+
+    expect(worldClockTool).toMatchObject({ autoRun: true, autoRefreshMs: 1000 })
+    expect(defaultResult.items).toHaveLength(12)
+    expect(defaultResult.itemLabels).toContain('中国 · 北京')
+    expect(matchedResult.itemLabels).toEqual(['美国 · 纽约', '美国 · 洛杉矶'])
   })
 
   it('marks text comparison as a line-safe unified diff', async () => {

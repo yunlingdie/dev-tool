@@ -30,6 +30,7 @@ const searchAliases: Record<string, string[]> = {
   'json-php-array': ['JSON 转 PHP', 'JSON PHP 数组'],
   'php-array-json': ['PHP 数组转 JSON', 'PHP to JSON'],
   'curl-fetch': ['curl 转 fetch', 'curl2fetch'],
+  'world-clock': ['世界时区', '世界时间', 'world clock', 'time zone', 'timezone'],
   'url-parser': ['URL 解析', '网址分析'],
   'sql-format': ['SQL 格式化', 'SQL 美化'],
 }

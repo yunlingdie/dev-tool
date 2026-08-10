@@ -91,6 +91,12 @@ import {
 import type { BaseTextEncoding } from '../lib/base-encodings'
 import type { FetchMethod } from '../lib/fetch-request'
 import type { RsaModulusLength } from '../lib/special'
+import {
+  findWorldClockLocations,
+  formatWorldClockTime,
+  worldClockLocationLabel,
+} from '../lib/world-clock'
+import { language } from '../lib/i18n'
 import type { ToolCategory, ToolDefinition, ToolResult, ToolValues } from './types'
 
 export const categories: ToolCategory[] = [
@@ -346,6 +352,27 @@ function convertDateTool(values: ToolValues): ToolResult {
   }
 }
 
+/** Queries country and city clocks and renders their current local times with IANA time zones. */
+function queryWorldClock(values: ToolValues): ToolResult {
+  const currentLanguage = language.value
+  const locations = findWorldClockLocations(textValue(values, 'query'))
+
+  // A query with no matching country or city must explain the empty result instead of showing stale clocks.
+  if (locations.length === 0) {
+    return output(currentLanguage === 'en' ? 'No matching country, city, or time zone.' : '未找到匹配的国家、城市或时区。')
+  }
+
+  const now = new Date()
+  const itemLabels = locations.map((location) => worldClockLocationLabel(location, currentLanguage))
+  const items = locations.map((location) => `${formatWorldClockTime(location, now)} (${location.timeZone})`)
+
+  return {
+    output: items.map((time, index) => `${itemLabels[index]}: ${time}`).join('\n'),
+    items,
+    itemLabels,
+  }
+}
+
 /** Converts a JSON array into a downloadable CSV text result. */
 function convertJsonCsv(values: ToolValues): ToolResult {
   return {
@@ -504,6 +531,11 @@ export const tools: ToolDefinition[] = [
       { key: 'input', label: '日期或时间戳', type: 'text', defaultValue: new Date().toISOString(), placeholder: 'ISO 日期、Unix 秒或毫秒', wide: true },
       { key: 'timeZone', label: '目标时区', type: 'select', defaultValue: 'Asia/Shanghai', options: ['Asia/Shanghai', 'UTC', 'Asia/Tokyo', 'Europe/London', 'America/New_York'].map((value) => ({ label: value, value })) },
     ], actionLabel: '转换时间', autoRun: true, execute: convertDateTool,
+  },
+  {
+    id: 'world-clock', title: '世界时区', category: categoryById.text, icon: Globe2,
+    fields: [{ key: 'query', label: '查询国家或城市', type: 'text', defaultValue: '', placeholder: '输入国家、城市或时区，如中国、东京、New York', wide: true }],
+    actionLabel: '查询时区', autoRun: true, autoRefreshMs: 1000, outputLabel: '世界时间', execute: queryWorldClock,
   },
   {
     id: 'base-converter', title: '进制转换', category: categoryById.text, icon: Binary,

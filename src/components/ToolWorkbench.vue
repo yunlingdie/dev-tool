@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { Check, Copy, Download, LoaderCircle, Play } from '@lucide/vue'
 
 import AudioAnalysisViewer from './AudioAnalysisViewer.vue'
@@ -99,6 +99,7 @@ const result = ref<ToolResult>(createInitialResult())
 const error = ref('')
 const isRunning = ref(false)
 let pendingAutoRun = false
+let autoRefreshTimer: number | undefined
 const copiedOutputIndex = ref<number | null>(null)
 const copiedItemKey = ref('')
 
@@ -229,8 +230,38 @@ function runAutomaticTool(): void {
   void runTool()
 }
 
+/** Stops the active world-clock refresh timer before a tool or tab changes state. */
+function clearAutoRefresh(): void {
+  // No timer exists until an active tool requests periodic current-time updates.
+  if (autoRefreshTimer === undefined) {
+    return
+  }
+
+  window.clearInterval(autoRefreshTimer)
+  autoRefreshTimer = undefined
+}
+
+/** Starts periodic execution only for active auto-run tools that declare a refresh interval. */
+function syncAutoRefresh(): void {
+  clearAutoRefresh()
+
+  const refreshInterval = props.tool.autoRefreshMs
+
+  // Hidden tabs and ordinary manual tools must not consume a periodic browser timer.
+  if (!props.active || !props.tool.autoRun || !refreshInterval) {
+    return
+  }
+
+  autoRefreshTimer = window.setInterval(() => {
+    // Current-time output must use the latest field values on every tick.
+    void runTool()
+  }, refreshInterval)
+}
+
 watch(() => props.prefill?.revision, applyCurrentPrefill, { immediate: true })
 watch(values, runAutomaticTool, { deep: true, immediate: true })
+watch([() => props.active, () => props.tool.autoRefreshMs], syncAutoRefresh, { immediate: true })
+onBeforeUnmount(clearAutoRefresh)
 
 /** Copies one named output and briefly confirms the completed action. */
 async function copyOutput(item: ToolOutput, index: number): Promise<void> {

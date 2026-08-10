@@ -67,6 +67,7 @@ export interface ToolDefinition {
   actionLabel: string
   execute: (values: ToolValues) => ToolResult | Promise<ToolResult>
   autoRun?: boolean
+  autoRefreshMs?: number
   outputLabel?: string
   outputLabels?: string[]
 }
