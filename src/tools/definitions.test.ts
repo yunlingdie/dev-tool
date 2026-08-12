@@ -161,7 +161,11 @@ describe('tool registry', () => {
     expect(result).toEqual({
       output: ['  first line', '- old value', '+ new value'].join('\n'),
       language: 'diff',
+      diffOnly: false,
     })
+
+    values.diffOnly = true
+    await expect(Promise.resolve(compareTool.execute(values))).resolves.toMatchObject({ diffOnly: true })
   })
 
   it('labels text statistics output in Chinese', async () => {

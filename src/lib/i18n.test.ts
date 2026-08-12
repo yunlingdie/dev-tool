@@ -12,6 +12,9 @@ describe('language state', () => {
     expect(localized.title).toBe('MD5 Calculator')
     expect(localized.fields[0].label).toBe('Text')
     expect(localized.actionLabel).toBe('Calculate MD5')
+
+    const compareTool = tools.find((tool) => tool.id === 'text-compare')
+    expect(localizeTool(compareTool!, 'en').fields.at(-1)?.label).toBe('Show differences only')
   })
 
   // Unsupported values must return to Chinese so persisted or malformed browser data stays safe.

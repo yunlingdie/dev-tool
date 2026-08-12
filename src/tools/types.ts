@@ -13,7 +13,7 @@ export interface ToolOption {
 export interface ToolField {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'select' | 'file'
+  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'file'
   defaultValue: ToolValue
   placeholder?: string
   options?: ToolOption[]
@@ -32,6 +32,7 @@ export interface ToolResult {
   items?: string[]
   itemLabels?: string[]
   language?: 'json' | 'diff'
+  diffOnly?: boolean
   filename?: string
   mimeType?: string
   downloadHref?: string
@@ -45,6 +46,7 @@ export interface ToolOutput {
   items?: string[]
   itemLabels?: string[]
   language?: 'json' | 'diff'
+  diffOnly?: boolean
   filename?: string
   mimeType?: string
   downloadHref?: string

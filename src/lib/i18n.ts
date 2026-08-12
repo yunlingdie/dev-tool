@@ -37,6 +37,8 @@ const messages = {
     websiteLanguage: '网站语言',
     chinese: '中文',
     english: 'English',
+    diffNavigation: '差异位置导航',
+    goToDifferenceLine: '跳转到第 {number} 行差异',
   },
   en: {
     closeNavigation: 'Close navigation',
@@ -68,6 +70,8 @@ const messages = {
     websiteLanguage: 'Website language',
     chinese: '中文',
     english: 'English',
+    diffNavigation: 'Difference navigation',
+    goToDifferenceLine: 'Go to difference on line {number}',
   },
 } as const
 
@@ -224,6 +228,7 @@ const textTranslations: Record<string, string> = {
   '生成 MAC': 'Generate MAC',
   '生成 IPv6 ULA': 'Generate IPv6 ULA',
   比较文本: 'Compare text',
+  只显示不一样的地方: 'Show differences only',
   统计文本: 'Count text',
   '输入需要计算 MD5 的文本': 'Enter text to calculate MD5',
   '输入需要计算 Hash 的文本': 'Enter text to calculate Hash',

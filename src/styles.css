@@ -615,6 +615,23 @@ textarea:focus-visible {
   padding: 7px;
 }
 
+.checkbox-field {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-weight: 400;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--focus);
+}
+
 .field input[type="file"]::file-selector-button {
   margin-right: 10px;
   padding: 5px 9px;

@@ -146,6 +146,7 @@ const displayedOutputs = computed<ToolOutput[]>(() => {
       items: result.value.items,
       itemLabels: result.value.itemLabels?.map((label) => translateText(label, language.value)),
       language: result.value.language,
+      diffOnly: result.value.diffOnly,
       filename: result.value.filename,
       mimeType: result.value.mimeType,
       downloadHref: result.value.downloadHref,
@@ -168,13 +169,35 @@ function diffLineClass(line: string): string {
   return 'diff-line--context'
 }
 
-/** Finds changed rows so the diff navigation rail can mirror their document positions. */
-function diffLineIndexes(content: string): number[] {
-  return content.split('\n').flatMap((line, index) => {
+/** Prepares one diff output once so rendering and navigation reuse the same line metadata. */
+function prepareDiffOutput(content: string, diffOnly: boolean | undefined): {
+  lines: Array<{ content: string, originalIndex: number }>
+  changedLines: Array<{ content: string, originalIndex: number }>
+  totalLineCount: number
+} {
+  const allLines = content.split('\n')
+  const changedLines = allLines.flatMap((line, originalIndex) => {
     // Context rows are intentionally omitted because only changed content needs navigation markers.
-    return line.startsWith('+ ') || line.startsWith('- ') ? [index] : []
+    return line.startsWith('+ ') || line.startsWith('- ') ? [{ content: line, originalIndex }] : []
   })
+
+  // The optional compact mode omits equal context rows while preserving diff markers.
+  const lines = diffOnly
+    ? changedLines
+    : allLines.map((line, originalIndex) => ({ content: line, originalIndex }))
+
+  return { lines, changedLines, totalLineCount: allLines.length }
 }
+
+/** Caches presentation data for every displayed output during the current render. */
+const preparedDiffOutputs = computed(() => displayedOutputs.value.map((item) => {
+  // Non-diff output has no rows or navigation markers to prepare.
+  if (item.language !== 'diff') {
+    return undefined
+  }
+
+  return prepareDiffOutput(item.content, item.diffOnly)
+}))
 
 /** Retains each rendered diff scroller so its matching navigation marker can scroll it. */
 function setDiffOutputElement(index: number, element: Element | null): void {
@@ -390,6 +413,11 @@ function updateValue(field: ToolField, event: Event): void {
   const control = event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
   let value: ToolValue = control.value
 
+  // Checkboxes express a boolean preference instead of their default string value.
+  if (field.type === 'checkbox') {
+    value = (control as HTMLInputElement).checked
+  }
+
   // Number inputs must remain numeric for calculations and bound validation.
   if (field.type === 'number') {
     value = control.valueAsNumber
@@ -409,7 +437,7 @@ function updateValue(field: ToolField, event: Event): void {
           class="field"
           :class="{ 'field--wide': field.wide }"
         >
-          <label :for="`${tool.id}-${field.key}`">{{ field.label }}</label>
+          <label v-if="field.type !== 'checkbox'" :for="`${tool.id}-${field.key}`">{{ field.label }}</label>
 
           <!-- Select fields present bounded option sets without free-form ambiguity. -->
           <select
@@ -426,6 +454,17 @@ function updateValue(field: ToolField, event: Event): void {
               {{ option.label }}
             </option>
           </select>
+
+          <!-- Checkboxes keep binary display preferences explicit without a text-based substitute. -->
+          <label v-else-if="field.type === 'checkbox'" class="checkbox-field">
+            <input
+              :id="`${tool.id}-${field.key}`"
+              type="checkbox"
+              :checked="values[field.key] === true"
+              @change="updateValue(field, $event)"
+            >
+            <span>{{ field.label }}</span>
+          </label>
 
           <!-- Textareas preserve multiline source formats and code. -->
           <textarea
@@ -569,22 +608,22 @@ function updateValue(field: ToolField, event: Event): void {
         <!-- Unified diff rows retain text markers while color separates additions and removals. -->
         <div v-else-if="item.language === 'diff' && item.content" class="diff-output-wrap">
           <pre :ref="(element) => setDiffOutputElement(index, element)" class="diff-output"><code><span
-            v-for="(line, lineIndex) in item.content.split('\n')"
-            :key="`${lineIndex}-${line}`"
+            v-for="line in preparedDiffOutputs[index]?.lines"
+            :key="`${line.originalIndex}-${line.content}`"
             class="diff-line"
-            :class="diffLineClass(line)"
-            :data-diff-line-index="lineIndex"
-          >{{ line }}</span></code></pre>
-          <div class="diff-navigation" aria-label="差异位置导航">
+            :class="diffLineClass(line.content)"
+            :data-diff-line-index="line.originalIndex"
+          >{{ line.content }}</span></code></pre>
+          <div class="diff-navigation" :aria-label="t('diffNavigation')">
             <button
-              v-for="lineIndex in diffLineIndexes(item.content)"
-              :key="lineIndex"
+              v-for="line in preparedDiffOutputs[index]?.changedLines"
+              :key="line.originalIndex"
               type="button"
               class="diff-navigation-marker"
-              :class="diffLineClass(item.content.split('\n')[lineIndex])"
-              :style="{ top: `${((lineIndex + 0.5) / item.content.split('\n').length) * 100}%` }"
-              :aria-label="`跳转到第 ${lineIndex + 1} 行差异`"
-              @click="scrollToDiffLine(index, lineIndex)"
+              :class="diffLineClass(line.content)"
+              :style="{ top: `${((line.originalIndex + 0.5) / preparedDiffOutputs[index]!.totalLineCount) * 100}%` }"
+              :aria-label="t('goToDifferenceLine').replace('{number}', String(line.originalIndex + 1))"
+              @click="scrollToDiffLine(index, line.originalIndex)"
             />
           </div>
         </div>
