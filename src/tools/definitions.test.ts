@@ -166,6 +166,7 @@ describe('tool registry', () => {
 
     values.diffOnly = true
     await expect(Promise.resolve(compareTool.execute(values))).resolves.toMatchObject({ diffOnly: true })
+    expect(compareTool.fields).toHaveLength(2)
   })
 
   it('labels text statistics output in Chinese', async () => {

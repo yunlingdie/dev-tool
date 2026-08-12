@@ -802,7 +802,6 @@ export const tools: ToolDefinition[] = [
     fields: [
       { key: 'before', label: '原文本', type: 'textarea', defaultValue: 'first line\nold value\n', wide: true },
       { key: 'after', label: '新文本', type: 'textarea', defaultValue: 'first line\nnew value\n', wide: true },
-      { key: 'diffOnly', label: '只显示不一样的地方', type: 'checkbox', defaultValue: false, wide: true },
     ], actionLabel: '比较文本', execute: compareTextTool,
   },
   {

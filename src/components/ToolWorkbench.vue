@@ -229,6 +229,12 @@ function scrollToDiffLine(outputIndex: number, lineIndex: number): void {
   output.scrollTo({ top: line.offsetTop - output.offsetTop, behavior: 'smooth' })
 }
 
+/** Updates the active text comparison display without recalculating its unchanged diff result. */
+function setDiffOnly(event: Event): void {
+  // Only a checked native checkbox can request the compact difference-only view.
+  result.value.diffOnly = (event.target as HTMLInputElement).checked
+}
+
 /** Builds a stable feedback key for one generated item in one output panel. */
 function generatedItemKey(outputIndex: number, itemIndex: number): string {
   return `${outputIndex}-${itemIndex}`
@@ -413,11 +419,6 @@ function updateValue(field: ToolField, event: Event): void {
   const control = event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
   let value: ToolValue = control.value
 
-  // Checkboxes express a boolean preference instead of their default string value.
-  if (field.type === 'checkbox') {
-    value = (control as HTMLInputElement).checked
-  }
-
   // Number inputs must remain numeric for calculations and bound validation.
   if (field.type === 'number') {
     value = control.valueAsNumber
@@ -437,7 +438,7 @@ function updateValue(field: ToolField, event: Event): void {
           class="field"
           :class="{ 'field--wide': field.wide }"
         >
-          <label v-if="field.type !== 'checkbox'" :for="`${tool.id}-${field.key}`">{{ field.label }}</label>
+          <label :for="`${tool.id}-${field.key}`">{{ field.label }}</label>
 
           <!-- Select fields present bounded option sets without free-form ambiguity. -->
           <select
@@ -454,17 +455,6 @@ function updateValue(field: ToolField, event: Event): void {
               {{ option.label }}
             </option>
           </select>
-
-          <!-- Checkboxes keep binary display preferences explicit without a text-based substitute. -->
-          <label v-else-if="field.type === 'checkbox'" class="checkbox-field">
-            <input
-              :id="`${tool.id}-${field.key}`"
-              type="checkbox"
-              :checked="values[field.key] === true"
-              @change="updateValue(field, $event)"
-            >
-            <span>{{ field.label }}</span>
-          </label>
 
           <!-- Textareas preserve multiline source formats and code. -->
           <textarea
@@ -544,6 +534,15 @@ function updateValue(field: ToolField, event: Event): void {
             <span class="output-label">{{ item.label }}</span>
             <span class="output-meta">{{ item.content.length.toLocaleString() }} {{ t('chars') }}</span>
           </div>
+          <!-- Diff display mode is colocated with its result so toggling never requires another comparison. -->
+          <label v-if="item.language === 'diff' && item.content" class="diff-only-toggle">
+            <input
+              type="checkbox"
+              :checked="item.diffOnly === true"
+              @change="setDiffOnly($event)"
+            >
+            <span>{{ translateText('只显示不一样的地方') }}</span>
+          </label>
           <div class="output-actions">
             <button
               type="button"

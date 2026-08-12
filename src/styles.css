@@ -615,16 +615,18 @@ textarea:focus-visible {
   padding: 7px;
 }
 
-.checkbox-field {
+.diff-only-toggle {
   display: inline-flex;
-  min-height: 40px;
   align-items: center;
-  gap: 8px;
-  color: var(--foreground);
-  font-weight: 400;
+  margin-left: auto;
+  gap: 6px;
+  color: #3c4844;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-.checkbox-field input[type="checkbox"] {
+.diff-only-toggle input[type="checkbox"] {
   width: 16px;
   min-width: 16px;
   height: 16px;
@@ -921,13 +923,15 @@ textarea:focus-visible {
 
 .diff-line--added {
   color: #116329;
-  background: #dafbe1;
+  background-color: #dafbe1;
+  background-image: repeating-linear-gradient(135deg, transparent 0 5px, rgb(26 127 55 / 10%) 5px 6px);
   border-left-color: #1a7f37;
 }
 
 .diff-line--removed {
   color: #82071e;
-  background: #ffebe9;
+  background-color: #ffebe9;
+  background-image: repeating-linear-gradient(45deg, transparent 0 5px, rgb(207 34 46 / 10%) 5px 6px);
   border-left-color: #cf222e;
 }
 
@@ -944,10 +948,11 @@ textarea:focus-visible {
 
 .diff-navigation-marker {
   position: absolute;
-  left: 0;
-  width: 6px;
-  min-height: 4px;
+  left: -9px;
+  width: 24px;
+  height: 24px;
   padding: 0;
+  background: transparent;
   border: 0;
   border-radius: 0;
   cursor: pointer;
@@ -955,11 +960,20 @@ textarea:focus-visible {
   transform: translateY(-50%);
 }
 
-.diff-navigation-marker.diff-line--added {
+.diff-navigation-marker::after {
+  position: absolute;
+  top: 10px;
+  left: 9px;
+  width: 6px;
+  height: 4px;
+  content: '';
+}
+
+.diff-navigation-marker.diff-line--added::after {
   background: #1a7f37;
 }
 
-.diff-navigation-marker.diff-line--removed {
+.diff-navigation-marker.diff-line--removed::after {
   background: #cf222e;
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { language, localizeTool, setLanguage, t } from './i18n'
+import { language, localizeTool, setLanguage, t, translateText } from './i18n'
 import { tools } from '../tools/definitions'
 
 describe('language state', () => {
@@ -13,8 +13,7 @@ describe('language state', () => {
     expect(localized.fields[0].label).toBe('Text')
     expect(localized.actionLabel).toBe('Calculate MD5')
 
-    const compareTool = tools.find((tool) => tool.id === 'text-compare')
-    expect(localizeTool(compareTool!, 'en').fields.at(-1)?.label).toBe('Show differences only')
+    expect(translateText('只显示不一样的地方', 'en')).toBe('Show differences only')
   })
 
   // Unsupported values must return to Chinese so persisted or malformed browser data stays safe.

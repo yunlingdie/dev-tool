@@ -13,7 +13,7 @@ export interface ToolOption {
 export interface ToolField {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'file'
+  type: 'text' | 'textarea' | 'number' | 'select' | 'file'
   defaultValue: ToolValue
   placeholder?: string
   options?: ToolOption[]
