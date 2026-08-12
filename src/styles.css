@@ -880,6 +880,10 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.diff-output-wrap {
+  position: relative;
+}
+
 .output-panel pre.diff-output {
   padding: 8px 0;
 }
@@ -912,6 +916,39 @@ textarea:focus-visible {
 
 .diff-line--context {
   color: #4b5753;
+}
+
+.diff-navigation {
+  position: absolute;
+  inset: 8px 3px 8px auto;
+  width: 6px;
+  pointer-events: none;
+}
+
+.diff-navigation-marker {
+  position: absolute;
+  left: 0;
+  width: 6px;
+  min-height: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translateY(-50%);
+}
+
+.diff-navigation-marker.diff-line--added {
+  background: #1a7f37;
+}
+
+.diff-navigation-marker.diff-line--removed {
+  background: #cf222e;
+}
+
+.diff-navigation-marker:focus-visible {
+  outline: 2px solid #1f2926;
+  outline-offset: 1px;
 }
 
 .generated-items {

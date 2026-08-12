@@ -102,6 +102,7 @@ let pendingAutoRun = false
 let autoRefreshTimer: number | undefined
 const copiedOutputIndex = ref<number | null>(null)
 const copiedItemKey = ref('')
+const diffOutputElements = new Map<number, HTMLPreElement>()
 
 /** Localizes labels returned by tool handlers without changing generated content. */
 function localizeOutput(item: ToolOutput): ToolOutput {
@@ -165,6 +166,44 @@ function diffLineClass(line: string): string {
   }
 
   return 'diff-line--context'
+}
+
+/** Finds changed rows so the diff navigation rail can mirror their document positions. */
+function diffLineIndexes(content: string): number[] {
+  return content.split('\n').flatMap((line, index) => {
+    // Context rows are intentionally omitted because only changed content needs navigation markers.
+    return line.startsWith('+ ') || line.startsWith('- ') ? [index] : []
+  })
+}
+
+/** Retains each rendered diff scroller so its matching navigation marker can scroll it. */
+function setDiffOutputElement(index: number, element: Element | null): void {
+  // Vue invokes function refs with null when the corresponding output is removed.
+  if (!element) {
+    diffOutputElements.delete(index)
+    return
+  }
+
+  diffOutputElements.set(index, element as HTMLPreElement)
+}
+
+/** Scrolls a diff output to the selected changed row without affecting other result panels. */
+function scrollToDiffLine(outputIndex: number, lineIndex: number): void {
+  const output = diffOutputElements.get(outputIndex)
+
+  // Outputs can disappear after a new execution, so stale marker clicks are ignored.
+  if (!output) {
+    return
+  }
+
+  const line = output.querySelector<HTMLElement>(`[data-diff-line-index="${lineIndex}"]`)
+
+  // The row lookup guards against an output being replaced between click and DOM update.
+  if (!line) {
+    return
+  }
+
+  output.scrollTo({ top: line.offsetTop - output.offsetTop, behavior: 'smooth' })
 }
 
 /** Builds a stable feedback key for one generated item in one output panel. */
@@ -528,12 +567,27 @@ function updateValue(field: ToolField, event: Event): void {
           :content="item.content"
         />
         <!-- Unified diff rows retain text markers while color separates additions and removals. -->
-        <pre v-else-if="item.language === 'diff' && item.content" class="diff-output"><code><span
-          v-for="(line, lineIndex) in item.content.split('\n')"
-          :key="`${lineIndex}-${line}`"
-          class="diff-line"
-          :class="diffLineClass(line)"
-        >{{ line }}</span></code></pre>
+        <div v-else-if="item.language === 'diff' && item.content" class="diff-output-wrap">
+          <pre :ref="(element) => setDiffOutputElement(index, element)" class="diff-output"><code><span
+            v-for="(line, lineIndex) in item.content.split('\n')"
+            :key="`${lineIndex}-${line}`"
+            class="diff-line"
+            :class="diffLineClass(line)"
+            :data-diff-line-index="lineIndex"
+          >{{ line }}</span></code></pre>
+          <div class="diff-navigation" aria-label="差异位置导航">
+            <button
+              v-for="lineIndex in diffLineIndexes(item.content)"
+              :key="lineIndex"
+              type="button"
+              class="diff-navigation-marker"
+              :class="diffLineClass(item.content.split('\n')[lineIndex])"
+              :style="{ top: `${((lineIndex + 0.5) / item.content.split('\n').length) * 100}%` }"
+              :aria-label="`跳转到第 ${lineIndex + 1} 行差异`"
+              @click="scrollToDiffLine(index, lineIndex)"
+            />
+          </div>
+        </div>
         <!-- Non-list results retain the existing multiline code output. -->
         <pre v-else><code>{{ item.content || t('waitExecution') }}</code></pre>
       </section>
