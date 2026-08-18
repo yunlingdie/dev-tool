@@ -1,19 +1,38 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { Code2, Menu, Search, X } from '@lucide/vue'
+import {
+  Code2,
+  Menu,
+  Search,
+  X,
+} from '@lucide/vue'
 
+import DrawingPalette from './components/DrawingPalette.vue'
+import DrawingWorkbench from './components/DrawingWorkbench.vue'
 import ToolSearchDialog from './components/ToolSearchDialog.vue'
 import ToolWorkbench from './components/ToolWorkbench.vue'
 import { language, localizeTool, setLanguage, t, translateCategory } from './lib/i18n'
 import { categories, findTool, tools } from './tools/definitions'
+import type { DrawingToolId } from './tools/drawing'
 import type { ToolSearchSuggestion } from './tools/search'
 import type { ToolDefinition, ToolPrefill } from './tools/types'
 
 const MAX_TOOL_HISTORY = 10
+type AppScene = 'tools' | 'drawing'
 
 /** Reads the application path from the URL fragment without retaining the hash marker. */
 function routePath(): string {
   return window.location.hash.replace(/^#\/?/, '')
+}
+
+/** Resolves the dedicated drawing route without changing existing tool routes. */
+function initialScene(): AppScene {
+  // The drawing route is the only fragment that belongs to the second application scene.
+  if (routePath() === 'drawing') {
+    return 'drawing'
+  }
+
+  return 'tools'
 }
 
 const selectedTool = ref(findTool(routePath()))
@@ -21,7 +40,28 @@ const openedTools = ref<ToolDefinition[]>([selectedTool.value])
 const toolPrefills = reactive<Record<string, ToolPrefill>>({})
 const searchDialogOpen = ref(false)
 const mobileNavigationOpen = ref(false)
+const activeScene = ref<AppScene>(initialScene())
+const activeDrawingTool = ref<DrawingToolId>('select')
 let prefillRevision = 0
+
+const sceneLabels = computed(() => {
+  // Drawing navigation follows the same language choice as the rest of the toolbox.
+  if (language.value === 'en') {
+    return {
+      tools: 'Developer tools',
+      drawing: 'Drawing tool',
+      drawingCategory: 'Canvas',
+      drawingTitle: 'Drawing tool',
+    }
+  }
+
+  return {
+    tools: '开发工具',
+    drawing: '绘图工具',
+    drawingCategory: '画布',
+    drawingTitle: '绘图工具',
+  }
+})
 
 const localizedCategories = computed(() => categories.map((category) => ({
   ...category,
@@ -96,6 +136,7 @@ async function closeHistoryTool(tool: ToolDefinition): Promise<void> {
 
 /** Selects a tool, updates the shareable URL, and closes the mobile drawer. */
 function selectTool(tool: ToolDefinition): void {
+  activeScene.value = 'tools'
   selectedTool.value = tool
   rememberTool(tool)
   mobileNavigationOpen.value = false
@@ -104,6 +145,28 @@ function selectTool(tool: ToolDefinition): void {
   if (routePath() !== tool.id) {
     window.history.replaceState(null, '', `#/${tool.id}`)
   }
+}
+
+/** Changes the application scene and writes a shareable fragment for the selected workspace. */
+function handleSceneChange(event: Event): void {
+  const nextScene = (event.target as HTMLSelectElement).value
+  mobileNavigationOpen.value = false
+
+  // Drawing owns one stable route because its temporary objects are intentionally local state.
+  if (nextScene === 'drawing') {
+    activeScene.value = 'drawing'
+    window.history.replaceState(null, '', '#/drawing')
+    return
+  }
+
+  activeScene.value = 'tools'
+  window.history.replaceState(null, '', `#/${selectedTool.value.id}`)
+}
+
+/** Activates one drawing palette item and closes the small-screen tool drawer. */
+function selectDrawingTool(toolId: DrawingToolId): void {
+  activeDrawingTool.value = toolId
+  mobileNavigationOpen.value = false
 }
 
 /** Opens the global tool search while releasing the small-screen navigation drawer. */
@@ -151,6 +214,13 @@ function selectSearchSuggestion(suggestion: ToolSearchSuggestion): void {
 
 /** Synchronizes browser fragment navigation with the active tool. */
 function handleHashChange(): void {
+  // The drawing fragment switches scenes without entering the developer-tool registry.
+  if (routePath() === 'drawing') {
+    activeScene.value = 'drawing'
+    return
+  }
+
+  activeScene.value = 'tools'
   const tool = findTool(routePath())
   selectedTool.value = tool
   rememberTool(tool)
@@ -164,6 +234,11 @@ function handleHashChange(): void {
 /** Registers the only global listener used by the single-page router. */
 onMounted(() => {
   window.addEventListener('hashchange', handleHashChange)
+
+  // The drawing route is already canonical and should not be replaced by the fallback tool.
+  if (activeScene.value === 'drawing') {
+    return
+  }
 
   // Bare, removed, and unknown routes resolve to the selected fallback tool.
   if (routePath() !== selectedTool.value.id) {
@@ -191,9 +266,15 @@ onBeforeUnmount(() => {
     <aside class="sidebar" :class="{ 'sidebar--open': mobileNavigationOpen }">
       <div class="brand-row">
         <div class="brand-mark" aria-hidden="true"><Code2 :size="19" /></div>
-        <div>
+        <div class="brand-copy">
           <strong>Dev Toolbox</strong>
-          <span>{{ tools.length }} {{ t('localTools') }}</span>
+          <label class="scene-picker">
+            <span class="sr-only">{{ t('navigation') }}</span>
+            <select :value="activeScene" @change="handleSceneChange">
+              <option value="tools">{{ sceneLabels.tools }}</option>
+              <option value="drawing">{{ sceneLabels.drawing }}</option>
+            </select>
+          </label>
         </div>
         <button
           type="button"
@@ -206,33 +287,42 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <!-- Tool search opens a content-aware command dialog. -->
-      <button
-        type="button"
-        class="search-trigger"
-        @click="openToolSearch"
-      >
-        <Search :size="16" aria-hidden="true" />
-        <span>{{ t('searchTools') }}</span>
-      </button>
+      <!-- Developer tools retain their searchable categorized navigation in the default scene. -->
+      <template v-if="activeScene === 'tools'">
+        <button
+          type="button"
+          class="search-trigger"
+          @click="openToolSearch"
+        >
+          <Search :size="16" aria-hidden="true" />
+          <span>{{ t('searchTools') }}</span>
+        </button>
 
-      <nav class="tool-navigation" :aria-label="t('developerTools')">
-        <section v-for="category in localizedCategories" :key="category.id" class="nav-section">
-          <h2>{{ category.label }}</h2>
-          <button
-            v-for="tool in toolsForCategory(category.id)"
-            :key="tool.id"
-            type="button"
-            class="tool-link"
-            :class="{ 'tool-link--active': selectedTool.id === tool.id }"
-            :aria-current="selectedTool.id === tool.id ? 'page' : undefined"
-            @click="selectTool(tool)"
-          >
-            <component :is="tool.icon" :size="16" aria-hidden="true" />
-            <span>{{ displayTool(tool).title }}</span>
-          </button>
-        </section>
-      </nav>
+        <nav class="tool-navigation" :aria-label="t('developerTools')">
+          <section v-for="category in localizedCategories" :key="category.id" class="nav-section">
+            <h2>{{ category.label }}</h2>
+            <button
+              v-for="tool in toolsForCategory(category.id)"
+              :key="tool.id"
+              type="button"
+              class="tool-link"
+              :class="{ 'tool-link--active': selectedTool.id === tool.id }"
+              :aria-current="selectedTool.id === tool.id ? 'page' : undefined"
+              @click="selectTool(tool)"
+            >
+              <component :is="tool.icon" :size="16" aria-hidden="true" />
+              <span>{{ displayTool(tool).title }}</span>
+            </button>
+          </section>
+        </nav>
+      </template>
+
+      <!-- Drawing navigation owns its localized palette while App retains tool selection state. -->
+      <DrawingPalette
+        v-else
+        :active-tool="activeDrawingTool"
+        @select="selectDrawingTool"
+      />
     </aside>
 
     <main class="main-area">
@@ -248,8 +338,15 @@ onBeforeUnmount(() => {
         </button>
 
         <div class="tool-heading">
-          <span>{{ displayTool(selectedTool).category.label }}</span>
-          <h1>{{ displayTool(selectedTool).title }}</h1>
+          <!-- Each scene exposes a concise location and title in the shared page header. -->
+          <template v-if="activeScene === 'drawing'">
+            <span>{{ sceneLabels.drawingCategory }}</span>
+            <h1>{{ sceneLabels.drawingTitle }}</h1>
+          </template>
+          <template v-else>
+            <span>{{ displayTool(selectedTool).category.label }}</span>
+            <h1>{{ displayTool(selectedTool).title }}</h1>
+          </template>
         </div>
 
         <div class="tool-header-actions">
@@ -268,8 +365,8 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
-      <!-- Bounded session history keeps stable tabs directly reachable and individually closeable. -->
-      <nav class="tool-history" :aria-label="t('toolHistory')">
+      <!-- Tool history belongs to developer tools; drawing keeps its full height for the canvas. -->
+      <nav v-if="activeScene === 'tools'" class="tool-history" :aria-label="t('toolHistory')">
         <span class="tool-history-label">{{ t('history') }}</span>
         <div class="tool-history-items">
           <div
@@ -300,17 +397,23 @@ onBeforeUnmount(() => {
         </div>
       </nav>
 
-      <div class="content-frame">
-        <!-- Open workbenches stay mounted for state preservation; closing a tab unmounts its state. -->
-        <ToolWorkbench
-          v-for="tool in openedTools"
-          v-show="selectedTool.id === tool.id"
-          :key="tool.id"
-          :tool="displayTool(tool)"
-          :prefill="toolPrefills[tool.id]"
-          :active="selectedTool.id === tool.id"
-        />
-      </div>
+      <!-- Both scenes stay mounted so switching does not discard temporary canvas or form state. -->
+      <DrawingWorkbench
+        v-show="activeScene === 'drawing'"
+        :active-tool="activeDrawingTool"
+        :active="activeScene === 'drawing'"
+      />
+      <div v-show="activeScene === 'tools'" class="content-frame">
+          <!-- Open workbenches stay mounted for state preservation; closing a tab unmounts its state. -->
+          <ToolWorkbench
+            v-for="tool in openedTools"
+            v-show="selectedTool.id === tool.id"
+            :key="tool.id"
+            :tool="displayTool(tool)"
+            :prefill="toolPrefills[tool.id]"
+            :active="selectedTool.id === tool.id"
+          />
+        </div>
     </main>
 
     <ToolSearchDialog

@@ -96,6 +96,7 @@ textarea:focus-visible {
 
 .brand-row > div:nth-child(2) {
   display: grid;
+  flex: 1;
   min-width: 0;
   gap: 3px;
 }
@@ -108,6 +109,29 @@ textarea:focus-visible {
 .brand-row span {
   color: var(--sidebar-muted);
   font-size: 12px;
+}
+
+.scene-picker {
+  display: block;
+  min-width: 0;
+}
+
+.scene-picker select {
+  width: 100%;
+  min-width: 0;
+  height: 25px;
+  padding: 2px 24px 2px 0;
+  color: var(--sidebar-muted);
+  font-size: 12px;
+  background-color: transparent;
+  border: 0;
+  border-radius: 3px;
+}
+
+.scene-picker select:hover,
+.scene-picker select:focus-visible {
+  color: #ffffff;
+  background-color: #263531;
 }
 
 .brand-mark {
