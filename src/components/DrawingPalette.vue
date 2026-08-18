@@ -3,21 +3,17 @@ import { computed, type Component } from 'vue'
 import {
   Hexagon,
   Minus,
-  MousePointer2,
   RectangleHorizontal,
   Square,
-  Type,
 } from '@lucide/vue'
 
 import { language } from '../lib/i18n'
-import type { DrawingToolId } from '../tools/drawing'
+import { DRAWING_TOOL_MIME, type DrawingToolId } from '../tools/drawing'
 
 type PaletteLabels = {
   navigation: string
   shapes: string
   lines: string
-  annotations: string
-  select: string
   square: string
   rectangle: string
   polygon: string
@@ -25,7 +21,6 @@ type PaletteLabels = {
   dashedLine: string
   thickLine: string
   thickDashedLine: string
-  text: string
 }
 
 type PaletteTool = {
@@ -39,21 +34,11 @@ type PaletteGroup = {
   tools: PaletteTool[]
 }
 
-const props = defineProps<{
-  activeTool: DrawingToolId
-}>()
-
-const emit = defineEmits<{
-  select: [toolId: DrawingToolId]
-}>()
-
 const labelsByLanguage: Record<'zh' | 'en', PaletteLabels> = {
   zh: {
     navigation: '绘图工具',
     shapes: '图形',
     lines: '线条',
-    annotations: '标注',
-    select: '选择 / 移动',
     square: '正方形',
     rectangle: '长方形',
     polygon: '多边形',
@@ -61,14 +46,11 @@ const labelsByLanguage: Record<'zh' | 'en', PaletteLabels> = {
     dashedLine: '虚线',
     thickLine: '粗实线',
     thickDashedLine: '粗虚线',
-    text: '文本输入框',
   },
   en: {
     navigation: 'Drawing tools',
     shapes: 'Shapes',
     lines: 'Lines',
-    annotations: 'Annotations',
-    select: 'Select / move',
     square: 'Square',
     rectangle: 'Rectangle',
     polygon: 'Polygon',
@@ -76,9 +58,12 @@ const labelsByLanguage: Record<'zh' | 'en', PaletteLabels> = {
     dashedLine: 'Dashed line',
     thickLine: 'Thick solid line',
     thickDashedLine: 'Thick dashed line',
-    text: 'Text input',
   },
 }
+
+const emit = defineEmits<{
+  place: [toolId: DrawingToolId]
+}>()
 
 // Resolves the palette copy from the application's shared language selection.
 const labels = computed(() => labelsByLanguage[language.value])
@@ -88,7 +73,6 @@ const drawingToolGroups = computed<PaletteGroup[]>(() => [
   {
     label: labels.value.shapes,
     tools: [
-      { id: 'select' as const, label: labels.value.select, icon: MousePointer2 },
       { id: 'square' as const, label: labels.value.square, icon: Square },
       { id: 'rectangle' as const, label: labels.value.rectangle, icon: RectangleHorizontal },
       { id: 'polygon' as const, label: labels.value.polygon, icon: Hexagon },
@@ -103,13 +87,20 @@ const drawingToolGroups = computed<PaletteGroup[]>(() => [
       { id: 'thick-dashed-line' as const, label: labels.value.thickDashedLine, icon: Minus },
     ],
   },
-  {
-    label: labels.value.annotations,
-    tools: [
-      { id: 'text' as const, label: labels.value.text, icon: Type },
-    ],
-  },
 ])
+
+/** Publishes the dragged palette material for the drawing canvas drop target. */
+function startToolDrag(event: DragEvent, toolId: DrawingToolId): void {
+  const dragData = event.dataTransfer
+
+  // Synthetic or unsupported drag events can omit transfer data and cannot reach the canvas.
+  if (!dragData) {
+    return
+  }
+
+  dragData.setData(DRAWING_TOOL_MIME, toolId)
+  dragData.effectAllowed = 'copy'
+}
 </script>
 
 <template>
@@ -122,12 +113,12 @@ const drawingToolGroups = computed<PaletteGroup[]>(() => [
           :key="drawingTool.id"
           type="button"
           class="tool-link drawing-tool-link"
-          :class="{
-            'tool-link--active': props.activeTool === drawingTool.id,
-            [`drawing-tool-link--${drawingTool.id}`]: true,
-          }"
-          :aria-pressed="props.activeTool === drawingTool.id"
-          @click="emit('select', drawingTool.id)"
+          :class="`drawing-tool-link--${drawingTool.id}`"
+          draggable="true"
+          :aria-label="drawingTool.label"
+          :title="drawingTool.label"
+          @dragstart="startToolDrag($event, drawingTool.id)"
+          @click="emit('place', drawingTool.id)"
         >
           <span class="drawing-tool-icon" aria-hidden="true">
             <component :is="drawingTool.icon" :size="22" />

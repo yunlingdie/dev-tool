@@ -2,14 +2,18 @@
 import { computed, toRef } from 'vue'
 import { Download, Redo2, Trash2, Undo2 } from '@lucide/vue'
 
-import { CANVAS_WIDTH, connectorSides, useDrawingCanvas } from '../composables/useDrawingCanvas'
+import {
+  CANVAS_WIDTH,
+  connectorSides,
+  shapeResizeHandles,
+  useDrawingCanvas,
+} from '../composables/useDrawingCanvas'
 import { language } from '../lib/i18n'
-import type { DrawingToolId } from '../tools/drawing'
 
 const props = defineProps<{
-  activeTool: DrawingToolId
   active: boolean
 }>()
+const lineResizeHandles = ['start', 'end'] as const
 
 const labels = computed(() => {
   // English labels keep the drawing workspace consistent with the global language picker.
@@ -17,7 +21,7 @@ const labels = computed(() => {
     return {
       title: 'Untitled flow',
       canvas: 'Drawing canvas',
-      empty: 'Choose a shape from the left, then drag on the canvas',
+      empty: 'Drag a shape or line from the left onto the canvas',
       undo: 'Undo',
       redo: 'Redo',
       delete: 'Delete selected',
@@ -32,7 +36,7 @@ const labels = computed(() => {
   return {
     title: '未命名流程图',
     canvas: '绘图画布',
-    empty: '从左侧选择图形，然后在画布上拖拽绘制',
+    empty: '从左侧拖拽图形或线条到画布',
     undo: '撤销',
     redo: '重做',
     delete: '删除所选',
@@ -63,8 +67,13 @@ const {
   polygonPoints,
   selectionBounds,
   connectorPoint,
+  resizeHandlePoint,
   startConnector,
+  startResize,
   dashPattern,
+  drawingTextLayout,
+  placeTool,
+  dropTool,
   commitText,
   editText,
   undo,
@@ -73,10 +82,21 @@ const {
   clearCanvas,
   exportSvg,
 } = useDrawingCanvas({
-  activeTool: toRef(props, 'activeTool'),
   active: toRef(props, 'active'),
   textDefault,
 })
+
+/** Returns the vertical offset for one rendered label line. */
+function textLineOffset(index: number, lineHeight: number): number {
+  // The first tspan starts at the text node baseline and later lines advance uniformly.
+  if (index === 0) {
+    return 0
+  }
+
+  return lineHeight
+}
+
+defineExpose({ placeTool })
 </script>
 
 <template>
@@ -112,7 +132,6 @@ const {
       <svg
         ref="canvas"
         class="drawing-canvas"
-        :class="`drawing-canvas--${activeTool}`"
         :viewBox="`0 0 ${CANVAS_WIDTH} ${canvasHeight}`"
         preserveAspectRatio="none"
         role="application"
@@ -121,6 +140,8 @@ const {
         @pointermove="continueInteraction"
         @pointerup="finishInteraction"
         @pointercancel="finishInteraction"
+        @dragover.prevent
+        @drop="dropTool"
       >
         <defs>
           <pattern id="drawing-grid-small" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -138,7 +159,6 @@ const {
           v-for="element in elements"
           :key="element.id"
           class="drawing-element"
-          :class="{ 'drawing-element--interactive': activeTool === 'select' }"
           @pointerdown.stop="startElementMove($event, element.id)"
           @dblclick.stop="editText(element)"
         >
@@ -163,6 +183,15 @@ const {
             stroke="#263d37"
             :stroke-width="element.strokeWidth"
           />
+          <!-- A transparent stroke gives thin lines a practical drag and selection target. -->
+          <line
+            v-if="element.kind === 'line'"
+            class="drawing-line-hit-target"
+            :x1="element.x"
+            :y1="element.y"
+            :x2="element.x + element.width"
+            :y2="element.y + element.height"
+          />
           <!-- Signed line dimensions preserve the direction of the original drag. -->
           <line
             v-if="element.kind === 'line'"
@@ -175,14 +204,25 @@ const {
             :stroke-dasharray="dashPattern(element)"
             stroke-linecap="round"
           />
-          <!-- Text labels support direct editing by double-clicking in selection mode. -->
+          <!-- Every label shares a bounded layout so long text cannot escape its drawing area. -->
           <text
-            v-if="element.kind === 'text'"
-            :x="element.x"
-            :y="element.y + 26"
-            fill="#1f2926"
-            font-size="24"
-          >{{ element.text }}</text>
+            class="drawing-element-label"
+            :class="{
+              'drawing-element-label--line': element.kind === 'line',
+              'drawing-element-label--shape': element.kind !== 'line',
+            }"
+            :x="drawingTextLayout(element).x"
+            :y="drawingTextLayout(element).y"
+            text-anchor="middle"
+          >
+            <title>{{ element.text }}</title>
+            <tspan
+              v-for="(line, lineIndex) in drawingTextLayout(element).lines"
+              :key="`${element.id}-${lineIndex}`"
+              :x="drawingTextLayout(element).x"
+              :dy="textLineOffset(lineIndex, drawingTextLayout(element).lineHeight)"
+            >{{ line }}</tspan>
+          </text>
           <!-- The selected object's bound remains visible without changing exported geometry. -->
           <rect
             v-if="selectedElementId === element.id"
@@ -200,6 +240,34 @@ const {
               :r="connectorHandleRadius"
               vector-effect="non-scaling-stroke"
               @pointerdown.stop="startConnector($event, element, side)"
+            />
+          </g>
+          <!-- Selected shapes expose four corner handles for direct resizing. -->
+          <g v-if="selectedElementId === element.id && element.kind !== 'line'">
+            <rect
+              v-for="handle in shapeResizeHandles"
+              :key="handle"
+              class="drawing-resize-handle drawing-shape-resize-handle"
+              :class="`drawing-resize-handle--${handle}`"
+              :x="resizeHandlePoint(element, handle).x - connectorHandleRadius * 0.7"
+              :y="resizeHandlePoint(element, handle).y - connectorHandleRadius * 0.7"
+              :width="connectorHandleRadius * 1.4"
+              :height="connectorHandleRadius * 1.4"
+              vector-effect="non-scaling-stroke"
+              @pointerdown.stop="startResize($event, element.id, handle)"
+            />
+          </g>
+          <!-- Selected lines expose both endpoints so their direction and length can be adjusted. -->
+          <g v-if="selectedElementId === element.id && element.kind === 'line'">
+            <circle
+              v-for="handle in lineResizeHandles"
+              :key="handle"
+              class="drawing-resize-handle drawing-line-endpoint-handle"
+              :cx="resizeHandlePoint(element, handle).x"
+              :cy="resizeHandlePoint(element, handle).y"
+              :r="connectorHandleRadius * 0.78"
+              vector-effect="non-scaling-stroke"
+              @pointerdown.stop="startResize($event, element.id, handle)"
             />
           </g>
         </g>

@@ -41,7 +41,7 @@ const toolPrefills = reactive<Record<string, ToolPrefill>>({})
 const searchDialogOpen = ref(false)
 const mobileNavigationOpen = ref(false)
 const activeScene = ref<AppScene>(initialScene())
-const activeDrawingTool = ref<DrawingToolId>('select')
+const drawingWorkbench = ref<{ placeTool: (toolId: DrawingToolId) => void } | null>(null)
 let prefillRevision = 0
 
 const sceneLabels = computed(() => {
@@ -163,9 +163,16 @@ function handleSceneChange(event: Event): void {
   window.history.replaceState(null, '', `#/${selectedTool.value.id}`)
 }
 
-/** Activates one drawing palette item and closes the small-screen tool drawer. */
-function selectDrawingTool(toolId: DrawingToolId): void {
-  activeDrawingTool.value = toolId
+/** Places a palette material through the mounted drawing workbench and closes mobile navigation. */
+function placeDrawingTool(toolId: DrawingToolId): void {
+  const workbench = drawingWorkbench.value
+
+  // The drawing workbench remains mounted with v-show, but the guard keeps navigation safe during teardown.
+  if (!workbench) {
+    return
+  }
+
+  workbench.placeTool(toolId)
   mobileNavigationOpen.value = false
 }
 
@@ -317,12 +324,8 @@ onBeforeUnmount(() => {
         </nav>
       </template>
 
-      <!-- Drawing navigation owns its localized palette while App retains tool selection state. -->
-      <DrawingPalette
-        v-else
-        :active-tool="activeDrawingTool"
-        @select="selectDrawingTool"
-      />
+      <!-- Drawing navigation exposes draggable materials without a persistent tool selection. -->
+      <DrawingPalette v-else @place="placeDrawingTool" />
     </aside>
 
     <main class="main-area">
@@ -399,8 +402,8 @@ onBeforeUnmount(() => {
 
       <!-- Both scenes stay mounted so switching does not discard temporary canvas or form state. -->
       <DrawingWorkbench
+        ref="drawingWorkbench"
         v-show="activeScene === 'drawing'"
-        :active-tool="activeDrawingTool"
         :active="activeScene === 'drawing'"
       />
       <div v-show="activeScene === 'tools'" class="content-frame">
