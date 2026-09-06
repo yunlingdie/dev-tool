@@ -9,6 +9,7 @@ const expectedToolIds = [
   'hash-text',
   'uuid',
   'ulid',
+  'snowflake',
   'rsa',
   'date-time',
   'world-clock',
@@ -201,8 +202,22 @@ describe('tool registry', () => {
     }
   })
 
+  it('generates five unique decimal Snowflake IDs with the selected machine ID', async () => {
+    const snowflakeTool = toolById('snowflake')
+    const values = defaultValues(snowflakeTool)
+    values.machineId = 42
+    const result = await Promise.resolve(snowflakeTool.execute(values))
+    const generated = result.output.split('\n')
+
+    expect(generated).toHaveLength(5)
+    expect(new Set(generated).size).toBe(5)
+    expect(generated.every((value) => /^\d+$/.test(value))).toBe(true)
+    expect(generated.slice(1).every((value, index) => BigInt(value) > BigInt(generated[index]))).toBe(true)
+    expect(generated.every((value) => ((BigInt(value) >> 12n) & 1023n) === 42n)).toBe(true)
+  })
+
   it('exposes each counted generator result as an individually copyable item', async () => {
-    for (const toolId of ['uuid', 'ulid', 'mac-generator', 'ipv6-ula']) {
+    for (const toolId of ['uuid', 'ulid', 'snowflake', 'mac-generator', 'ipv6-ula']) {
       const generatorTool = toolById(toolId)
       const result = await Promise.resolve(generatorTool.execute(defaultValues(generatorTool)))
       const items = result.items

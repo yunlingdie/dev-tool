@@ -319,6 +319,11 @@ const uuidHandlers: Record<string, () => string> = {
   v7: uuidV7,
 }
 
+const snowflakeEpoch = Date.UTC(2024, 0, 1)
+const snowflakeSequenceLimit = 0xfff
+let lastSnowflakeTimestamp = -1
+let snowflakeSequence = 0
+
 /** Generates one or more UUID values using the selected standard version. */
 function generateUuid(values: ToolValues): ToolResult {
   const generator = uuidHandlers[textValue(values, 'version')]
@@ -331,6 +336,40 @@ function generateUuid(values: ToolValues): ToolResult {
   // The wrapper prevents Array.from's index argument from being treated as UUID's output buffer.
   const items = Array.from({ length: itemCount(values) }, () => generator())
   return itemOutput(items)
+}
+
+/** Creates one decimal Snowflake ID with a 41-bit timestamp, 10-bit machine ID, and 12-bit sequence. */
+function nextSnowflakeId(machineId: number): string {
+  // The machine ID occupies exactly ten bits in the Snowflake layout.
+  if (!Number.isInteger(machineId) || machineId < 0 || machineId > 1023) {
+    throw new Error('机器 ID 必须是 0 到 1023 的整数')
+  }
+
+  let timestamp = Date.now() - snowflakeEpoch
+
+  // Clock rollback or the same millisecond must continue the local sequence without duplicating an ID.
+  if (timestamp <= lastSnowflakeTimestamp) {
+    timestamp = lastSnowflakeTimestamp
+    snowflakeSequence += 1
+
+    // More than 4,096 requests in one millisecond advance a logical millisecond to retain uniqueness.
+    if (snowflakeSequence > snowflakeSequenceLimit) {
+      timestamp += 1
+      snowflakeSequence = 0
+    }
+  } else {
+    // A newer physical millisecond starts a new sequence range.
+    snowflakeSequence = 0
+  }
+
+  lastSnowflakeTimestamp = timestamp
+  return ((BigInt(timestamp) << 22n) | (BigInt(machineId) << 12n) | BigInt(snowflakeSequence)).toString()
+}
+
+/** Generates Snowflake IDs as decimal strings so the full 64-bit value remains precise in JavaScript. */
+function generateSnowflake(values: ToolValues): ToolResult {
+  const machineId = numberValue(values, 'machineId')
+  return itemOutput(Array.from({ length: itemCount(values) }, () => nextSnowflakeId(machineId)))
 }
 
 /** Converts one date input into ISO, Unix, and target-zone representations. */
@@ -498,6 +537,15 @@ export const tools: ToolDefinition[] = [
     actionLabel: '生成 ULID',
     // Generates sortable ULIDs in the requested amount.
     execute: (values) => itemOutput(Array.from({ length: itemCount(values) }, () => ulid())),
+  },
+  {
+    id: 'snowflake', title: '雪花 ID 生成', category: categoryById.generate, icon: FingerprintPattern,
+    fields: [
+      { key: 'machineId', label: '机器 ID', type: 'number', defaultValue: 1, min: 0, max: 1023 },
+      { key: 'count', label: '数量', type: 'number', defaultValue: 5, min: 1, max: 100 },
+    ],
+    actionLabel: '生成雪花 ID',
+    execute: generateSnowflake,
   },
   {
     id: 'rsa', title: 'RSA 密钥对生成', category: categoryById.generate, icon: KeyRound,
