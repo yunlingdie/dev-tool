@@ -33,6 +33,15 @@ export interface ParsedJwt {
   signature: string
 }
 
+/** HMAC algorithms that can be generated and verified entirely in the browser. */
+export type JwtHmacAlgorithm = 'HS256' | 'HS384' | 'HS512'
+
+/** A parsed JWT together with the result of HMAC signature verification. */
+export interface VerifiedJwt extends ParsedJwt {
+  algorithm: JwtHmacAlgorithm
+  valid: boolean
+}
+
 /** Basic counts useful when inspecting an arbitrary text value. */
 export interface TextStats {
   characters: number
@@ -456,6 +465,115 @@ function decodeBase64Url(input: string): string {
   }
 
   return decodeBase64(padded)
+}
+
+/** Encodes UTF-8 text as unpadded Base64URL for JWT compact serialization. */
+function encodeBase64Url(input: string): string {
+  return encodeBase64(input)
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+}
+
+/** Maps one JWT HMAC label to the matching Web Crypto digest. */
+function jwtHmacHash(algorithm: JwtHmacAlgorithm): 'SHA-256' | 'SHA-384' | 'SHA-512' {
+  switch (algorithm) {
+    // HS256 is the JWT name for HMAC with SHA-256.
+    case 'HS256':
+      return 'SHA-256'
+    // HS384 is the JWT name for HMAC with SHA-384.
+    case 'HS384':
+      return 'SHA-384'
+    // HS512 is the JWT name for HMAC with SHA-512.
+    case 'HS512':
+      return 'SHA-512'
+  }
+}
+
+/** Reads and validates the HMAC algorithm declared by a JWT header. */
+function jwtHmacAlgorithm(header: Record<string, unknown>): JwtHmacAlgorithm {
+  const algorithm = header.alg
+
+  // Only explicit HMAC algorithms can be safely verified with the shared secret field.
+  if (algorithm !== 'HS256' && algorithm !== 'HS384' && algorithm !== 'HS512') {
+    throw new Error('JWT alg 必须是 HS256、HS384 或 HS512')
+  }
+
+  return algorithm
+}
+
+/** Rejects an absent secret before a caller accidentally creates an unsigned-equivalent token. */
+function assertJwtSecret(secret: string): void {
+  // Empty HMAC secrets are technically possible but unsafe for an interactive signing tool.
+  if (secret.length === 0) {
+    throw new Error('JWT 密钥不能为空')
+  }
+}
+
+/** Signs JWT compact data with a browser-local HMAC key and returns Base64URL text. */
+async function signJwtData(data: string, secret: string, algorithm: JwtHmacAlgorithm): Promise<string> {
+  assertJwtSecret(secret)
+
+  // Web Crypto keeps the supplied secret and generated signature local to the browser.
+  if (!globalThis.crypto?.subtle) {
+    throw new Error('当前浏览器不支持 JWT 签名')
+  }
+
+  const key = await globalThis.crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: { name: jwtHmacHash(algorithm) } },
+    false,
+    ['sign'],
+  )
+  const signature = await globalThis.crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data))
+  return btoa(bytesToBinaryString(new Uint8Array(signature)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '')
+}
+
+/** Compares two compact-signature strings without stopping at the first mismatched character. */
+function constantTimeTextEqual(left: string, right: string): boolean {
+  // Differently sized signatures cannot match and must not enter an out-of-bounds comparison.
+  if (left.length !== right.length) {
+    return false
+  }
+
+  let difference = 0
+  for (let index = 0; index < left.length; index += 1) {
+    // Every character is compared so a matching prefix does not change the loop duration.
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index)
+  }
+
+  return difference === 0
+}
+
+/** Creates a compact HMAC-signed JWT from an object payload. */
+export async function createJwt(
+  payload: Record<string, unknown>,
+  secret: string,
+  algorithm: JwtHmacAlgorithm = 'HS256',
+): Promise<string> {
+  const header = { alg: algorithm, typ: 'JWT' }
+  const signingInput = `${encodeBase64Url(JSON.stringify(header))}.${encodeBase64Url(JSON.stringify(payload))}`
+  const signature = await signJwtData(signingInput, secret, algorithm)
+
+  return `${signingInput}.${signature}`
+}
+
+/** Verifies a compact HMAC-signed JWT and returns its decoded header and payload. */
+export async function verifyJwtSignature(input: string, secret: string): Promise<VerifiedJwt> {
+  const parsed = parseJwt(input)
+  const algorithm = jwtHmacAlgorithm(parsed.header)
+  const signingInput = input.trim().split('.').slice(0, 2).join('.')
+  const expectedSignature = await signJwtData(signingInput, secret, algorithm)
+
+  return {
+    ...parsed,
+    algorithm,
+    valid: constantTimeTextEqual(parsed.signature, expectedSignature),
+  }
 }
 
 /** Parses a JWT header and payload without claiming to verify its signature. */

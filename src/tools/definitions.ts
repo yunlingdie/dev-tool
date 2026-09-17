@@ -73,14 +73,16 @@ import {
   jsonToCsv,
   minifyJson,
   numberToRoman,
+  createJwt,
   parseJwt,
   romanToNumber,
   shuffleString,
   textToAsciiBinary,
   textToUnicode,
   unicodeToText,
+  verifyJwtSignature,
 } from '../lib/core'
-import type { HashAlgorithm } from '../lib/core'
+import type { HashAlgorithm, JwtHmacAlgorithm } from '../lib/core'
 import {
   composeToDockerRuns,
   createBase64Download,
@@ -257,6 +259,34 @@ function directed(
   }
 
   return output(handler(textValue(values, 'input')))
+}
+
+/** Parses a JWT payload field as the object required by the compact JWT parser. */
+function jwtPayloadValue(values: ToolValues): Record<string, unknown> {
+  const payload = JSON.parse(textValue(values, 'payload')) as unknown
+
+  // JWT payload inspection in this toolbox expects named claims rather than scalar JSON values.
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    throw new Error('JWT 载荷必须是 JSON 对象')
+  }
+
+  return payload as Record<string, unknown>
+}
+
+/** Generates one locally signed compact JWT using the selected HMAC algorithm. */
+async function createJwtTool(values: ToolValues): Promise<ToolResult> {
+  const token = await createJwt(
+    jwtPayloadValue(values),
+    textValue(values, 'secret'),
+    textValue(values, 'algorithm') as JwtHmacAlgorithm,
+  )
+
+  return itemOutput([token])
+}
+
+/** Decodes and validates a locally supplied compact JWT against its HMAC signature. */
+async function verifyJwtSignatureTool(values: ToolValues): Promise<ToolResult> {
+  return output(await verifyJwtSignature(textValue(values, 'input'), textValue(values, 'secret')))
 }
 
 /** Converts text through the selected Base32 or Base58 codec loaded on demand. */
@@ -729,6 +759,23 @@ export const tools: ToolDefinition[] = [
     id: 'jwt-parser', title: 'JWT 解析器', category: categoryById.encode, icon: FileKey2,
     fields: [{ key: 'input', label: 'JWT', type: 'textarea', defaultValue: '', wide: true }],
     actionLabel: '解析 JWT', execute: (values) => output(parseJwt(textValue(values, 'input'))),
+  },
+  {
+    id: 'jwt-signer', title: 'JWT 签名生成', category: categoryById.encode, icon: KeyRound,
+    fields: [
+      { key: 'algorithm', label: '算法', type: 'select', defaultValue: 'HS256', options: [{ label: 'HS256', value: 'HS256' }, { label: 'HS384', value: 'HS384' }, { label: 'HS512', value: 'HS512' }] },
+      { key: 'payload', label: 'JWT 载荷（JSON）', type: 'textarea', defaultValue: '{\n  "sub": "user-123"\n}', wide: true },
+      { key: 'secret', label: 'HMAC 密钥', type: 'textarea', defaultValue: '', wide: true },
+    ],
+    actionLabel: '生成 JWT', execute: createJwtTool,
+  },
+  {
+    id: 'jwt-signature-verifier', title: 'JWT 签名校验', category: categoryById.encode, icon: BadgeCheck,
+    fields: [
+      { key: 'input', label: 'JWT', type: 'textarea', defaultValue: '', wide: true },
+      { key: 'secret', label: 'HMAC 密钥', type: 'textarea', defaultValue: '', wide: true },
+    ],
+    actionLabel: '校验签名', execute: verifyJwtSignatureTool,
   },
   {
     id: 'certificate-parser', title: '证书解析器', category: categoryById.encode, icon: FileKey2,

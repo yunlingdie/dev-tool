@@ -6,6 +6,7 @@ import {
   convertBase,
   convertDate,
   countText,
+  createJwt,
   decodeBase64,
   decodeUrlComponent,
   encodeBase64,
@@ -22,6 +23,7 @@ import {
   textToAsciiBinary,
   textToUnicode,
   unicodeToText,
+  verifyJwtSignature,
 } from './core'
 
 /** Encodes JSON as an unpadded Base64URL value for JWT test fixtures. */
@@ -120,6 +122,29 @@ describe('URL and JWT parsing', () => {
       payload: { sub: '用户-1', admin: true },
       signature: 'signature',
     })
+  })
+
+  it('creates and verifies an HS256 JWT locally', async () => {
+    const token = await createJwt({ sub: '用户-1', admin: true }, 'test-secret')
+
+    await expect(verifyJwtSignature(token, 'test-secret')).resolves.toMatchObject({
+      algorithm: 'HS256',
+      header: { alg: 'HS256', typ: 'JWT' },
+      payload: { sub: '用户-1', admin: true },
+      valid: true,
+    })
+    await expect(verifyJwtSignature(token, 'wrong-secret')).resolves.toMatchObject({ valid: false })
+  })
+
+  it('rejects empty signing secrets and non-HMAC JWT algorithms', async () => {
+    await expect(createJwt({ sub: 'user-1' }, '')).rejects.toThrow('JWT 密钥不能为空')
+    const token = [
+      encodeBase64UrlFixture({ alg: 'none', typ: 'JWT' }),
+      encodeBase64UrlFixture({ sub: 'user-1' }),
+      'signature',
+    ].join('.')
+
+    await expect(verifyJwtSignature(token, 'test-secret')).rejects.toThrow('JWT alg 必须是')
   })
 })
 

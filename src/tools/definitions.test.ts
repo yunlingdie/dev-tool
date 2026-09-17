@@ -34,6 +34,8 @@ const expectedToolIds = [
   'url-codec',
   'url-parser',
   'jwt-parser',
+  'jwt-signer',
+  'jwt-signature-verifier',
   'certificate-parser',
   'certificate-key-match',
   'shuffle',
@@ -249,6 +251,22 @@ describe('tool registry', () => {
 
     expect(phpResult.output).toContain("'name' => 'dev-tool'")
     expect(JSON.parse(jsonResult.output)).toMatchObject({ name: 'dev-tool', active: true })
+  })
+
+  it('generates and verifies a locally HMAC-signed JWT', async () => {
+    const signerTool = toolById('jwt-signer')
+    const verifierTool = toolById('jwt-signature-verifier')
+    const signerValues = defaultValues(signerTool)
+    signerValues.secret = 'test-secret'
+    const signed = await signerTool.execute(signerValues)
+    const verifierValues = defaultValues(verifierTool)
+    verifierValues.input = signed.output
+    verifierValues.secret = 'test-secret'
+
+    await expect(Promise.resolve(verifierTool.execute(verifierValues))).resolves.toMatchObject({
+      language: 'json',
+      output: expect.stringContaining('"valid": true'),
+    })
   })
 
   it('executes the Base32/Base58 and Fetch conversion tools through the registry', async () => {
