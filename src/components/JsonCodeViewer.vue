@@ -69,7 +69,7 @@ const viewerTheme = EditorView.theme({
     minHeight: '190px',
     maxHeight: '540px',
     color: 'var(--foreground)',
-    backgroundColor: '#fbfcfb',
+    backgroundColor: 'var(--input)',
     fontSize: '13px',
   },
   '.cm-scroller': {
@@ -96,7 +96,7 @@ const viewerTheme = EditorView.theme({
     borderBottom: '1px solid color-mix(in srgb, var(--primary) 24%, transparent)',
   },
   '&.cm-focused .cm-rangeBracket': {
-    color: '#0c6258',
+    color: 'var(--foreground)',
     backgroundColor: 'color-mix(in srgb, var(--focus) 18%, transparent)',
     outline: '1px solid color-mix(in srgb, var(--focus) 38%, transparent)',
   },

@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { Switch } from '@headlessui/vue'
 import {
   Code2,
   Menu,
+  Moon,
   Search,
+  Sun,
   X,
 } from '@lucide/vue'
 
 import DrawingPalette from './components/DrawingPalette.vue'
 import DrawingWorkbench from './components/DrawingWorkbench.vue'
+import HeadlessSelect from './components/HeadlessSelect.vue'
 import ToolSearchDialog from './components/ToolSearchDialog.vue'
 import ToolWorkbench from './components/ToolWorkbench.vue'
 import { language, localizeTool, setLanguage, t, translateCategory } from './lib/i18n'
@@ -18,7 +22,19 @@ import type { ToolSearchSuggestion } from './tools/search'
 import type { ToolDefinition, ToolPrefill } from './tools/types'
 
 const MAX_TOOL_HISTORY = 10
+const THEME_STORAGE_KEY = 'dev-tool-theme'
 type AppScene = 'tools' | 'drawing'
+type ColorTheme = 'light' | 'dark'
+
+/** Restores the explicit theme choice while keeping the light design as the default. */
+function initialTheme(): ColorTheme {
+  // Only the persisted dark value changes the default daytime presentation.
+  if (window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark') {
+    return 'dark'
+  }
+
+  return 'light'
+}
 
 /** Reads the application path from the URL fragment without retaining the hash marker. */
 function routePath(): string {
@@ -41,8 +57,38 @@ const toolPrefills = reactive<Record<string, ToolPrefill>>({})
 const searchDialogOpen = ref(false)
 const mobileNavigationOpen = ref(false)
 const activeScene = ref<AppScene>(initialScene())
+const colorTheme = ref<ColorTheme>(initialTheme())
 const drawingWorkbench = ref<{ placeTool: (toolId: DrawingToolId) => void } | null>(null)
 let prefillRevision = 0
+
+/** Applies the selected palette to the document and persists it across reloads. */
+function applyColorTheme(nextTheme: ColorTheme): void {
+  document.documentElement.dataset.theme = nextTheme
+  window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme)
+}
+
+watch(colorTheme, applyColorTheme, { immediate: true })
+
+/** Converts the Headless UI switch state into the application's named theme. */
+function setNightMode(enabled: boolean): void {
+  // Checked means the user explicitly requested the darker palette.
+  if (enabled) {
+    colorTheme.value = 'dark'
+    return
+  }
+
+  colorTheme.value = 'light'
+}
+
+/** Describes the action performed by the theme switch in the current state. */
+const themeToggleLabel = computed(() => {
+  // Night mode exposes the inverse action so assistive text stays actionable.
+  if (colorTheme.value === 'dark') {
+    return t('switchToLight')
+  }
+
+  return t('switchToDark')
+})
 
 const sceneLabels = computed(() => {
   // Drawing navigation follows the same language choice as the rest of the toolbox.
@@ -62,6 +108,18 @@ const sceneLabels = computed(() => {
     drawingTitle: '绘图工具',
   }
 })
+
+/** Builds the scene choices from the same localized labels shown in the page header. */
+const sceneOptions = computed(() => [
+  { value: 'tools', label: sceneLabels.value.tools },
+  { value: 'drawing', label: sceneLabels.value.drawing },
+])
+
+/** Builds the website-language choices from the shared translation catalog. */
+const languageOptions = computed(() => [
+  { value: 'zh', label: t('chinese') },
+  { value: 'en', label: t('english') },
+])
 
 const localizedCategories = computed(() => categories.map((category) => ({
   ...category,
@@ -148,8 +206,7 @@ function selectTool(tool: ToolDefinition): void {
 }
 
 /** Changes the application scene and writes a shareable fragment for the selected workspace. */
-function handleSceneChange(event: Event): void {
-  const nextScene = (event.target as HTMLSelectElement).value
+function selectScene(nextScene: string): void {
   mobileNavigationOpen.value = false
 
   // Drawing owns one stable route because its temporary objects are intentionally local state.
@@ -183,11 +240,9 @@ function openToolSearch(): void {
 }
 
 /** Stores the selected website language in the shared persistent language state. */
-function handleLanguageChange(event: Event): void {
-  const select = event.target as HTMLSelectElement
-
+function selectLanguage(nextLanguage: string): void {
   // Only the English option changes away from the default Chinese interface.
-  if (select.value === 'en') {
+  if (nextLanguage === 'en') {
     setLanguage('en')
     return
   }
@@ -275,13 +330,14 @@ onBeforeUnmount(() => {
         <div class="brand-mark" aria-hidden="true"><Code2 :size="19" /></div>
         <div class="brand-copy">
           <strong>Dev Toolbox</strong>
-          <label class="scene-picker">
-            <span class="sr-only">{{ t('navigation') }}</span>
-            <select :value="activeScene" @change="handleSceneChange">
-              <option value="tools">{{ sceneLabels.tools }}</option>
-              <option value="drawing">{{ sceneLabels.drawing }}</option>
-            </select>
-          </label>
+          <div class="scene-picker">
+            <HeadlessSelect
+              :model-value="activeScene"
+              :options="sceneOptions"
+              :aria-label="t('navigation')"
+              @change="selectScene"
+            />
+          </div>
         </div>
         <button
           type="button"
@@ -353,17 +409,26 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="tool-header-actions">
-          <label class="language-picker">
-            <span class="sr-only">{{ t('websiteLanguage') }}</span>
-            <select
-              :value="language"
-              :aria-label="t('websiteLanguage')"
-              @change="handleLanguageChange"
+          <div class="theme-picker">
+            <Sun :size="15" aria-hidden="true" />
+            <Switch
+              :model-value="colorTheme === 'dark'"
+              class="headless-switch theme-switch"
+              :aria-label="themeToggleLabel"
+              @update:model-value="setNightMode"
             >
-              <option value="zh">{{ t('chinese') }}</option>
-              <option value="en">{{ t('english') }}</option>
-            </select>
-          </label>
+              <span class="headless-switch-thumb" aria-hidden="true" />
+            </Switch>
+            <Moon :size="15" aria-hidden="true" />
+          </div>
+          <div class="language-picker">
+            <HeadlessSelect
+              :model-value="language"
+              :options="languageOptions"
+              :aria-label="t('websiteLanguage')"
+              @change="selectLanguage"
+            />
+          </div>
           <div class="local-status"><span aria-hidden="true" />{{ t('localProcessing') }}</div>
         </div>
       </header>

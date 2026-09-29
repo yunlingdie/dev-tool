@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { Check, Copy, Download, LoaderCircle, Play } from '@lucide/vue'
+import { Switch } from '@headlessui/vue'
 
 import AudioAnalysisViewer from './AudioAnalysisViewer.vue'
+import HeadlessSelect from './HeadlessSelect.vue'
 import JsonCodeViewer from './JsonCodeViewer.vue'
 import { language, t, translateText } from '../lib/i18n'
 import type {
@@ -230,9 +232,8 @@ function scrollToDiffLine(outputIndex: number, lineIndex: number): void {
 }
 
 /** Updates the active text comparison display without recalculating its unchanged diff result. */
-function setDiffOnly(event: Event): void {
-  // Only a checked native checkbox can request the compact difference-only view.
-  result.value.diffOnly = (event.target as HTMLInputElement).checked
+function setDiffOnly(enabled: boolean): void {
+  result.value.diffOnly = enabled
 }
 
 /** Builds a stable feedback key for one generated item in one output panel. */
@@ -441,20 +442,13 @@ function updateValue(field: ToolField, event: Event): void {
           <label :for="`${tool.id}-${field.key}`">{{ field.label }}</label>
 
           <!-- Select fields present bounded option sets without free-form ambiguity. -->
-          <select
+          <HeadlessSelect
             v-if="field.type === 'select'"
             :id="`${tool.id}-${field.key}`"
-            :value="values[field.key]"
-            @change="updateValue(field, $event)"
-          >
-            <option
-              v-for="option in field.options"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
+            :model-value="String(values[field.key])"
+            :options="field.options ?? []"
+            @change="values[field.key] = $event"
+          />
 
           <!-- Textareas preserve multiline source formats and code. -->
           <textarea
@@ -535,14 +529,16 @@ function updateValue(field: ToolField, event: Event): void {
             <span class="output-meta">{{ item.content.length.toLocaleString() }} {{ t('chars') }}</span>
           </div>
           <!-- Diff display mode is colocated with its result so toggling never requires another comparison. -->
-          <label v-if="item.language === 'diff' && item.content" class="diff-only-toggle">
-            <input
-              type="checkbox"
-              :checked="item.diffOnly === true"
-              @change="setDiffOnly($event)"
+          <div v-if="item.language === 'diff' && item.content" class="diff-only-toggle">
+            <Switch
+              :model-value="item.diffOnly === true"
+              class="headless-switch"
+              @update:model-value="setDiffOnly"
             >
+              <span class="headless-switch-thumb" aria-hidden="true" />
+            </Switch>
             <span>{{ translateText('只显示不一样的地方') }}</span>
-          </label>
+          </div>
           <div class="output-actions">
             <button
               type="button"

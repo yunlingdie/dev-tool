@@ -145,11 +145,11 @@ defineExpose({ placeTool })
       >
         <defs>
           <pattern id="drawing-grid-small" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e8ece9" stroke-width="1" />
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e4e4e7" stroke-width="1" />
           </pattern>
           <pattern id="drawing-grid" width="100" height="100" patternUnits="userSpaceOnUse">
             <rect width="100" height="100" fill="url(#drawing-grid-small)" />
-            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#dce3de" stroke-width="1.4" />
+            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#d4d4d8" stroke-width="1.4" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="#ffffff" />
@@ -170,8 +170,8 @@ defineExpose({ placeTool })
             :width="element.width"
             :height="element.height"
             rx="3"
-            fill="#eef4f0"
-            stroke="#263d37"
+            fill="#f4f4f5"
+            stroke="#27272a"
             :stroke-width="element.strokeWidth"
             :stroke-dasharray="dashPattern(element)"
           />
@@ -179,8 +179,8 @@ defineExpose({ placeTool })
           <polygon
             v-if="element.kind === 'polygon'"
             :points="polygonPoints(element)"
-            fill="#eef4f0"
-            stroke="#263d37"
+            fill="#f4f4f5"
+            stroke="#27272a"
             :stroke-width="element.strokeWidth"
           />
           <!-- A transparent stroke gives thin lines a practical drag and selection target. -->
@@ -199,7 +199,7 @@ defineExpose({ placeTool })
             :y1="element.y"
             :x2="element.x + element.width"
             :y2="element.y + element.height"
-            stroke="#263d37"
+            stroke="#27272a"
             :stroke-width="element.strokeWidth"
             :stroke-dasharray="dashPattern(element)"
             stroke-linecap="round"
