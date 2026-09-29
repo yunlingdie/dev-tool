@@ -50,13 +50,19 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             {
+              // The entry polyfill must execute without eagerly evaluating tsyringe's certificate chunk.
+              name: 'reflect-polyfill',
+              test: /node_modules[\/]reflect-metadata/,
+              priority: 7,
+            },
+            {
               name: 'curl-converter',
               test: /node_modules[\/](curlconverter|web-tree-sitter|tree-sitter|tree-sitter-bash|jsesc|lossless-json|yamljs)/,
               priority: 6,
             },
             {
               name: 'certificate-tools',
-              test: /node_modules[\/](@peculiar|asn1js|pvtsutils|pvutils|tsyringe|reflect-metadata)/,
+              test: /node_modules[\/](@peculiar|asn1js|pvtsutils|pvutils|tsyringe)/,
               priority: 5,
             },
             {
