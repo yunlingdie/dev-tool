@@ -304,8 +304,15 @@ async function convertBaseEncoding(values: ToolValues): Promise<ToolResult> {
 
 /** Parses a PEM X.509 certificate locally and returns structured details. */
 async function parseCertificateTool(values: ToolValues): Promise<ToolResult> {
-  const { parseCertificate } = await import('../lib/certificate')
-  return output(await parseCertificate(textValue(values, 'certificate')))
+  const { parseCertificateBundle } = await import('../lib/certificate')
+  const certificates = await parseCertificateBundle(textValue(values, 'certificate'))
+
+  // A single certificate keeps the existing object-shaped output for backward compatibility.
+  if (certificates.length === 1) {
+    return output(certificates[0])
+  }
+
+  return output(certificates)
 }
 
 /** Verifies a PEM certificate and PKCS#8 private key by signing a local challenge. */

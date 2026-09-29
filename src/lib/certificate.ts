@@ -108,11 +108,11 @@ function errorMessage(error: unknown): string {
   return String(error)
 }
 
-/** Reads exactly one PEM block and rejects a missing or ambiguous document. */
-function decodeSinglePemBlock(
+/** Reads every PEM block and rejects a missing or malformed document. */
+function decodePemBlocks(
   pem: string,
   inputName: string,
-): { rawData: ArrayBuffer; type: string } {
+): ReturnType<typeof PemConverter.decodeWithHeaders> {
   let blocks: ReturnType<typeof PemConverter.decodeWithHeaders>
 
   try {
@@ -125,6 +125,16 @@ function decodeSinglePemBlock(
   if (blocks.length === 0) {
     throw new Error(`${inputName} is not a valid PEM document`)
   }
+
+  return blocks
+}
+
+/** Reads exactly one PEM block and rejects an ambiguous document. */
+function decodeSinglePemBlock(
+  pem: string,
+  inputName: string,
+): { rawData: ArrayBuffer; type: string } {
+  const blocks = decodePemBlocks(pem, inputName)
 
   // Multiple blocks are rejected so callers never verify an unintended first item from a bundle.
   if (blocks.length !== 1) {
@@ -409,6 +419,25 @@ export async function parseCertificate(pem: string, now = new Date()): Promise<C
   } catch (error) {
     throw new Error(`Unable to parse certificate details: ${errorMessage(error)}`)
   }
+}
+
+/** Parses every certificate in a PEM bundle while preserving its original order. */
+export async function parseCertificateBundle(
+  pem: string,
+  now = new Date(),
+): Promise<CertificateDetails[]> {
+  const blocks = decodePemBlocks(pem, 'Certificate input')
+
+  return Promise.all(blocks.map(async (block, index) => {
+    // A certificate bundle must not silently ignore keys or unrelated PEM objects.
+    if (block.type !== 'CERTIFICATE') {
+      throw new Error(
+        `Certificate input block ${index + 1} must use a CERTIFICATE PEM block, received ${block.type}`,
+      )
+    }
+
+    return parseCertificate(PemConverter.encode(block.rawData, block.type), now)
+  }))
 }
 
 /** Verifies that one unencrypted PKCS#8 private key matches a certificate public key. */

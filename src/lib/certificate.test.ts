@@ -14,7 +14,7 @@ import {
 } from '@peculiar/x509'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { parseCertificate, verifyCertificateKeyPair } from './certificate'
+import { parseCertificate, parseCertificateBundle, verifyCertificateKeyPair } from './certificate'
 
 interface RsaCertificateMaterial {
   certificatePem: string
@@ -126,6 +126,21 @@ describe('certificate parsing and key verification', () => {
     })
     expect(details.sha256Fingerprint).toMatch(/^([0-9A-F]{2}:){31}[0-9A-F]{2}$/)
     expect(() => JSON.stringify(details)).not.toThrow()
+  })
+
+  // Certificate-chain inputs should return every certificate instead of being rejected as ambiguous.
+  it('parses multiple certificates from one PEM bundle', async () => {
+    const certificates = await parseCertificateBundle(
+      `${matchingMaterial.certificatePem}\n${otherMaterial.certificatePem}`,
+      new Date('2027-01-01T00:00:00.000Z'),
+    )
+
+    expect(certificates).toHaveLength(2)
+    expect(certificates.map((certificate) => certificate.subject)).toEqual([
+      'CN=example.test, O=Dev Tool',
+      'CN=example.test, O=Dev Tool',
+    ])
+    expect(certificates[0].sha256Fingerprint).not.toBe(certificates[1].sha256Fingerprint)
   })
 
   // A signature made by the certificate's own private key must verify successfully.
