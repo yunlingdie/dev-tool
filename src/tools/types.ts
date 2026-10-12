@@ -68,6 +68,7 @@ export interface ToolDefinition {
   fields: ToolField[]
   actionLabel: string
   execute: (values: ToolValues) => ToolResult | Promise<ToolResult>
+  supportsJsonDesensitization?: boolean
   autoRun?: boolean
   autoRefreshMs?: number
   outputLabel?: string

@@ -658,6 +658,405 @@ export function formatJson(input: string | unknown, spaces = 2): string {
   return result
 }
 
+/** Checks whether a YYYY-MM-DD value represents a real calendar date. */
+function isDateString(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+
+  // Non-matching strings cannot provide the year, month, and day required for validation.
+  if (!match) {
+    return false
+  }
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(0)
+  date.setUTCHours(0, 0, 0, 0)
+  date.setUTCFullYear(year, month - 1, day)
+
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+}
+
+/** Checks common date-time strings with optional fractions and UTC offsets. */
+function isDateTimeString(value: string): boolean {
+  const match = /^(\d{4}-\d{2}-\d{2})[T ](?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:(?:0\d|1[0-3]):?[0-5]\d|14:?00))?$/.exec(value)
+
+  // A complete time component is required before the calendar portion is checked.
+  if (!match) {
+    return false
+  }
+
+  return isDateString(match[1])
+}
+
+/** Checks standalone 24-hour time strings with optional fractions and UTC offsets. */
+function isTimeString(value: string): boolean {
+  return /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:(?:0\d|1[0-3]):?[0-5]\d|14:?00))?$/.test(value)
+}
+
+/** Checks dotted IPv4 addresses without accepting out-of-range octets. */
+function isIpv4String(value: string): boolean {
+  const octets = value.split('.')
+
+  // IPv4 always contains exactly four decimal octets.
+  if (octets.length !== 4) {
+    return false
+  }
+
+  return octets.every((octet) => /^(?:0|[1-9]\d{0,2})$/.test(octet) && Number(octet) <= 255)
+}
+
+/** Checks colon-delimited IPv6 values with the platform URL parser. */
+function isIpv6String(value: string): boolean {
+  // A colon is required so ordinary hostnames are not delegated to the IPv6 parser.
+  if (!value.includes(':')) {
+    return false
+  }
+
+  try {
+    const url = new URL(`http://[${value}]/`)
+    return url.hostname.startsWith('[') && url.hostname.endsWith(']')
+  } catch {
+    // URL parsing rejects malformed or out-of-range IPv6 segments.
+    return false
+  }
+}
+
+/** Checks absolute HTTP and HTTPS URLs without treating ordinary text as a relative URL. */
+function isUrlString(value: string): boolean {
+  // Only absolute web URLs belong to the URL marker used by this toolbox.
+  if (!/^https?:\/\/\S+$/i.test(value)) {
+    return false
+  }
+
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    // URL parsing rejects malformed hosts, ports, and escape sequences.
+    return false
+  }
+}
+
+/** Checks mainland mobile numbers or explicit international E.164-style numbers. */
+function isPhoneString(value: string): boolean {
+  const compact = value.replace(/[\s()-]/g, '')
+
+  // Unprefixed phone detection stays narrow to avoid classifying arbitrary numeric IDs.
+  if (/^1[3-9]\d{9}$/.test(compact)) {
+    return true
+  }
+
+  return /^\+[1-9]\d{7,14}$/.test(compact)
+}
+
+/** Checks compact JWT text by validating its segments and decoded JSON objects. */
+function isJwtString(value: string): boolean {
+  // Requiring three non-empty Base64URL segments avoids treating arbitrary dotted text as a JWT.
+  if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) {
+    return false
+  }
+
+  try {
+    parseJwt(value)
+    return true
+  } catch {
+    // Malformed Base64URL or non-object JSON segments are not valid JWT values.
+    return false
+  }
+}
+
+/** Checks common six-octet MAC address representations. */
+function isMacAddressString(value: string): boolean {
+  return /^(?:[0-9a-f]{2}([:-]))(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}$/i.test(value)
+    || /^(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}$/i.test(value)
+}
+
+/** Checks IPv4 and IPv6 CIDR notation and returns its matching marker. */
+function cidrMarker(value: string): 'ipv4_cidr' | 'ipv6_cidr' | undefined {
+  const parts = value.split('/')
+
+  // CIDR notation contains one address and one numeric prefix length.
+  if (parts.length !== 2 || !/^\d{1,3}$/.test(parts[1])) {
+    return undefined
+  }
+
+  const prefixLength = Number(parts[1])
+
+  // IPv4 networks allow prefix lengths from zero through 32.
+  if (isIpv4String(parts[0]) && prefixLength <= 32) {
+    return 'ipv4_cidr'
+  }
+
+  // IPv6 networks allow prefix lengths from zero through 128.
+  if (isIpv6String(parts[0]) && prefixLength <= 128) {
+    return 'ipv6_cidr'
+  }
+
+  return undefined
+}
+
+/** Checks a MongoDB ObjectId represented as 12 hexadecimal bytes. */
+function isObjectIdString(value: string): boolean {
+  return /^[0-9a-f]{24}$/i.test(value)
+}
+
+/** Checks an 18-character Chinese resident identity number and its checksum. */
+function isChineseIdCardString(value: string): boolean {
+  const normalized = value.toUpperCase()
+
+  // The address, birth date, sequence, and checksum fields must occupy their fixed positions.
+  if (!/^[1-9]\d{5}\d{8}\d{3}[\dX]$/.test(normalized)) {
+    return false
+  }
+
+  const birthday = `${normalized.slice(6, 10)}-${normalized.slice(10, 12)}-${normalized.slice(12, 14)}`
+
+  // Impossible calendar dates cannot belong to a valid identity number.
+  if (!isDateString(birthday)) {
+    return false
+  }
+
+  // A zero sequence code is reserved and does not identify a person.
+  if (normalized.slice(14, 17) === '000') {
+    return false
+  }
+
+  const weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
+  const checkCharacters = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2']
+  const checksum = normalized
+    .slice(0, 17)
+    .split('')
+    .reduce((sum, digit, index) => sum + Number(digit) * weights[index], 0)
+
+  return checkCharacters[checksum % 11] === normalized[17]
+}
+
+/** Checks a separated or compact bank-card number with the Luhn checksum. */
+function isBankCardString(value: string): boolean {
+  // Only digits, spaces, and hyphens are accepted before separator removal.
+  if (!/^[\d -]+$/.test(value)) {
+    return false
+  }
+
+  const digits = value.replace(/[ -]/g, '')
+
+  // Common payment card numbers contain 12 through 19 digits and never start with zero.
+  if (!/^[1-9]\d{11,18}$/.test(digits)) {
+    return false
+  }
+
+  let checksum = 0
+  for (let index = digits.length - 1; index >= 0; index -= 1) {
+    let digit = Number(digits[index])
+
+    // Every second digit from the right is doubled by the Luhn algorithm.
+    if ((digits.length - index) % 2 === 0) {
+      digit *= 2
+
+      // Doubled decimal digits are reduced to their digit sum.
+      if (digit > 9) {
+        digit -= 9
+      }
+    }
+
+    checksum += digit
+  }
+
+  return checksum % 10 === 0
+}
+
+/** Checks RFC-style data URLs and validates Base64 payloads when declared. */
+function isDataUrlString(value: string): boolean {
+  const match = /^data:([^,]*),([\s\S]*)$/i.exec(value)
+
+  // The metadata and payload must be separated by the first comma.
+  if (!match) {
+    return false
+  }
+
+  const metadata = match[1]
+
+  // Metadata may omit the media type but any supplied parameters must be syntactically bounded.
+  if (!/^(?:[a-z]+\/[a-z0-9.+-]+)?(?:;[a-z0-9!#$&^_.+-]+=[^;,]+)*(?:;base64)?$/i.test(metadata)) {
+    return false
+  }
+
+  // Non-Base64 data URLs carry URL-escaped text and need no binary decoding.
+  if (!metadata.toLowerCase().endsWith(';base64')) {
+    return true
+  }
+
+  try {
+    atob(match[2])
+    return true
+  } catch {
+    // Declared Base64 payloads must decode successfully.
+    return false
+  }
+}
+
+/** Checks ASCII DNS domain names with bounded labels and a named top-level domain. */
+function isDomainString(value: string): boolean {
+  let normalized = value
+
+  // A final root-label dot is valid DNS notation but not part of the labels themselves.
+  if (normalized.endsWith('.')) {
+    normalized = normalized.slice(0, -1)
+  }
+
+  // DNS names are bounded to 253 visible characters and must include a parent domain.
+  if (normalized.length === 0 || normalized.length > 253 || !normalized.includes('.')) {
+    return false
+  }
+
+  const labels = normalized.split('.')
+
+  // Every label must stay within DNS length limits and cannot begin or end with a hyphen.
+  if (!labels.every((label) => /^(?!-)[a-z0-9-]{1,63}(?<!-)$/.test(label))) {
+    return false
+  }
+
+  const topLevelDomain = labels[labels.length - 1]
+  return /^[a-z]{2,63}$/i.test(topLevelDomain)
+    || /^xn--[a-z0-9-]{2,59}$/i.test(topLevelDomain)
+}
+
+/** Returns the most specific safe marker for one JSON string value. */
+function desensitizedStringMarker(value: string): string {
+  const uuidMatch = /^[0-9a-f]{8}-[0-9a-f]{4}-([1-8])[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.exec(value)
+
+  // UUID versions share one canonical layout, with the version encoded in the third group.
+  if (uuidMatch) {
+    return `uuid${uuidMatch[1]}`
+  }
+
+  // ULIDs use 26 Crockford Base32 characters and a bounded timestamp prefix.
+  if (/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(value)) {
+    return 'ulid'
+  }
+
+  // MongoDB ObjectIds are fixed-width hexadecimal identifiers.
+  if (isObjectIdString(value)) {
+    return 'objectid'
+  }
+
+  // JWT parsing confirms both compact serialization and decoded JSON objects.
+  if (isJwtString(value)) {
+    return 'jwt'
+  }
+
+  // Full date-times take precedence over their date prefix.
+  if (isDateTimeString(value)) {
+    return 'YYYY-MM-DD HH:MM:SS'
+  }
+
+  // Calendar-only values keep their expected presentation shape.
+  if (isDateString(value)) {
+    return 'YYYY-MM-DD'
+  }
+
+  // Standalone time values keep their expected presentation shape.
+  if (isTimeString(value)) {
+    return 'HH:MM:SS'
+  }
+
+  // Email recognition remains intentionally syntax-based and does not claim deliverability.
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    return 'email'
+  }
+
+  // Data URLs have their own scheme and optional Base64 payload validation.
+  if (isDataUrlString(value)) {
+    return 'data_url'
+  }
+
+  // Absolute web URLs are checked before IP literals embedded in their hosts.
+  if (isUrlString(value)) {
+    return 'url'
+  }
+
+  const networkMarker = cidrMarker(value)
+
+  // CIDR values retain their address family in the marker.
+  if (networkMarker) {
+    return networkMarker
+  }
+
+  // Valid dotted decimal addresses receive the IPv4 marker.
+  if (isIpv4String(value)) {
+    return 'ipv4'
+  }
+
+  // Valid compressed or expanded colon addresses receive the IPv6 marker.
+  if (isIpv6String(value)) {
+    return 'ipv6'
+  }
+
+  // Six-octet hardware addresses are normalized to one MAC marker.
+  if (isMacAddressString(value)) {
+    return 'mac'
+  }
+
+  // Resident identity numbers require both a valid birth date and checksum.
+  if (isChineseIdCardString(value)) {
+    return 'id_card'
+  }
+
+  // Payment card numbers require a plausible length and successful Luhn checksum.
+  if (isBankCardString(value)) {
+    return 'bank_card'
+  }
+
+  // Phone recognition runs after dates and IPs to reduce numeric false positives.
+  if (isPhoneString(value)) {
+    return 'phone'
+  }
+
+  // Bare hostnames are checked last so more specific network formats take precedence.
+  if (isDomainString(value)) {
+    return 'domain'
+  }
+
+  return 'string'
+}
+
+/** Replaces JSON leaf values with stable type markers while preserving its structure. */
+export function desensitizeJson(input: string | unknown, spaces = 2): string {
+  /** Converts one parsed JSON value without exposing its original leaf content. */
+  function desensitizeValue(value: unknown): unknown {
+    // Arrays retain their length and nesting while each contained value is desensitized.
+    if (Array.isArray(value)) {
+      return value.map(desensitizeValue)
+    }
+
+    // JSON null is represented by an explicit marker instead of being mistaken for an object.
+    if (value === null) {
+      return 'null'
+    }
+
+    // Object keys describe the schema and remain intact while their values are desensitized.
+    if (typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+          .map(([key, nestedValue]) => [key, desensitizeValue(nestedValue)]),
+      )
+    }
+
+    // Strings receive the most specific semantic marker before primitive fallback.
+    if (typeof value === 'string') {
+      return desensitizedStringMarker(value)
+    }
+
+    // Remaining primitive values expose only their JSON type.
+    return typeof value
+  }
+
+  return formatJson(desensitizeValue(parseJsonInput(input)), spaces)
+}
+
 /** Removes unnecessary whitespace from serialized or already parsed JSON. */
 export function minifyJson(input: string | unknown): string {
   return formatJson(input, 0)

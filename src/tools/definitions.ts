@@ -693,7 +693,7 @@ export const tools: ToolDefinition[] = [
   {
     id: 'yaml-json', title: 'YAML 到 JSON', category: categoryById.data, icon: FileJson,
     fields: [{ key: 'input', label: 'YAML', type: 'textarea', defaultValue: 'name: dev-tool\nactive: true\n', wide: true }],
-    actionLabel: '转换为 JSON', execute: (values) => jsonOutput(yamlToJson(textValue(values, 'input'))),
+    actionLabel: '转换为 JSON', supportsJsonDesensitization: true, execute: (values) => jsonOutput(yamlToJson(textValue(values, 'input'))),
   },
   {
     id: 'yaml-toml', title: 'YAML 到 TOML', category: categoryById.data, icon: FileCode2,
@@ -713,7 +713,7 @@ export const tools: ToolDefinition[] = [
   {
     id: 'toml-json', title: 'TOML 到 JSON', category: categoryById.data, icon: FileJson,
     fields: [{ key: 'input', label: 'TOML', type: 'textarea', defaultValue: 'name = "dev-tool"\nactive = true\n', wide: true }],
-    actionLabel: '转换为 JSON', execute: (values) => jsonOutput(tomlToJson(textValue(values, 'input'))),
+    actionLabel: '转换为 JSON', supportsJsonDesensitization: true, execute: (values) => jsonOutput(tomlToJson(textValue(values, 'input'))),
   },
   {
     id: 'toml-yaml', title: 'TOML 到 YAML', category: categoryById.data, icon: FileCode2,
@@ -723,7 +723,7 @@ export const tools: ToolDefinition[] = [
   {
     id: 'xml-json', title: 'XML to JSON', category: categoryById.data, icon: FileJson,
     fields: [{ key: 'input', label: 'XML', type: 'textarea', defaultValue: '<root><name>dev-tool</name></root>', wide: true }],
-    actionLabel: '转换为 JSON', execute: (values) => jsonOutput(xmlToJson(textValue(values, 'input'))),
+    actionLabel: '转换为 JSON', supportsJsonDesensitization: true, execute: (values) => jsonOutput(xmlToJson(textValue(values, 'input'))),
   },
   {
     id: 'json-xml', title: 'JSON to XML', category: categoryById.data, icon: FileCode2,
@@ -744,6 +744,7 @@ export const tools: ToolDefinition[] = [
     id: 'php-array-json', title: 'PHP 数组转 JSON', category: categoryById.data, icon: FileJson,
     fields: [{ key: 'input', label: 'PHP 数组', type: 'textarea', defaultValue: '[\n    "name" => "dev-tool",\n    "active" => true,\n    "roles" => ["admin", "developer"],\n]', wide: true }],
     actionLabel: '转换为 JSON',
+    supportsJsonDesensitization: true,
     // Loads the safe PHP AST parser only when a PHP array needs conversion.
     execute: async (values) => {
       const { phpArrayToJson } = await import('../lib/php-array')
@@ -814,7 +815,7 @@ export const tools: ToolDefinition[] = [
     fields: [
       { key: 'spaces', label: '缩进空格', type: 'select', defaultValue: '2', options: [{ label: '2 spaces', value: '2' }, { label: '4 spaces', value: '4' }] },
       { key: 'input', label: 'JSON', type: 'textarea', defaultValue: '{"name":"dev-tool","active":true}', wide: true },
-    ], actionLabel: '格式化 JSON', autoRun: true, execute: (values) => jsonOutput(formatJson(textValue(values, 'input'), numberValue(values, 'spaces'))),
+    ], actionLabel: '格式化 JSON', supportsJsonDesensitization: true, autoRun: true, execute: (values) => jsonOutput(formatJson(textValue(values, 'input'), numberValue(values, 'spaces'))),
   },
   {
     id: 'json-minify', title: 'JSON 压缩', category: categoryById.data, icon: Braces,

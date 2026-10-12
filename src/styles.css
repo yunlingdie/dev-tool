@@ -886,6 +886,7 @@ textarea:focus-visible {
 .action-row {
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
 .primary-action {
@@ -905,6 +906,25 @@ textarea:focus-visible {
 .primary-action:hover:not(:disabled) {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
+}
+
+.secondary-action {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 15px;
+  color: var(--foreground);
+  font-weight: 650;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.secondary-action:hover:not(:disabled) {
+  background: var(--surface-muted);
+  border-color: #a1a1aa;
 }
 
 .output-panel {

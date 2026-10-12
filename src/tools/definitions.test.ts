@@ -243,6 +243,20 @@ describe('tool registry', () => {
     }
   })
 
+  it('offers desensitization on every JSON conversion and formatting tool', () => {
+    const desensitizationToolIds = tools
+      .filter((tool) => tool.supportsJsonDesensitization)
+      .map((tool) => tool.id)
+
+    expect(desensitizationToolIds).toEqual([
+      'yaml-json',
+      'toml-json',
+      'xml-json',
+      'php-array-json',
+      'json-format',
+    ])
+  })
+
   it('executes both PHP array conversion tools through the registry', async () => {
     const jsonToPhpTool = toolById('json-php-array')
     const phpToJsonTool = toolById('php-array-json')

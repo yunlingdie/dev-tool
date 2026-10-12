@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { Check, Copy, Download, LoaderCircle, Play } from '@lucide/vue'
+import { Check, Copy, Download, LoaderCircle, Play, Shield } from '@lucide/vue'
 import { Switch } from '@headlessui/vue'
 
 import AudioAnalysisViewer from './AudioAnalysisViewer.vue'
 import HeadlessSelect from './HeadlessSelect.vue'
 import JsonCodeViewer from './JsonCodeViewer.vue'
+import { desensitizeJson } from '../lib/core'
 import { language, t, translateText } from '../lib/i18n'
 import type {
   ToolDefinition,
@@ -242,7 +243,7 @@ function generatedItemKey(outputIndex: number, itemIndex: number): string {
 }
 
 /** Executes the current tool and converts thrown values into a visible error state. */
-async function runTool(): Promise<void> {
+async function runTool(mode: 'normal' | 'desensitize' = 'normal'): Promise<void> {
   // Repeated manual clicks are ignored; search handoffs queue through applyCurrentPrefill.
   if (isRunning.value) {
     return
@@ -254,7 +255,16 @@ async function runTool(): Promise<void> {
   const executionPrefillRevision = props.prefill?.revision
 
   try {
-    const nextResult = await props.tool.execute(executionValues)
+    let nextResult = await props.tool.execute(executionValues)
+
+    // Desensitization transforms only tools that explicitly produce user-facing JSON.
+    if (mode === 'desensitize' && props.tool.supportsJsonDesensitization) {
+      nextResult = {
+        ...nextResult,
+        output: desensitizeJson(nextResult.output),
+        language: 'json',
+      }
+    }
 
     // A result belongs on screen only while its search handoff is still the latest one.
     if (executionPrefillRevision === props.prefill?.revision) {
@@ -431,7 +441,7 @@ function updateValue(field: ToolField, event: Event): void {
 
 <template>
   <section class="workbench" :aria-label="t('toolWorkspace')">
-    <form class="tool-form" @submit.prevent="runTool">
+    <form class="tool-form" @submit.prevent="runTool()">
       <div class="field-grid">
         <div
           v-for="field in visibleFields"
@@ -495,14 +505,24 @@ function updateValue(field: ToolField, event: Event): void {
         </div>
       </div>
 
-      <!-- Field-driven tools execute on every edit, so their submit control is unnecessary. -->
-      <div v-if="!tool.autoRun" class="action-row">
-        <button class="primary-action" type="submit" :disabled="isRunning">
+      <!-- JSON desensitization shares the existing action row, including on auto-run formatting. -->
+      <div v-if="!tool.autoRun || tool.supportsJsonDesensitization" class="action-row">
+        <button v-if="!tool.autoRun" class="primary-action" type="submit" :disabled="isRunning">
           <!-- Running tools use motion to communicate that the command is still active. -->
           <LoaderCircle v-if="isRunning" :size="17" class="spin" aria-hidden="true" />
           <!-- Idle tools use the conventional play icon for execution. -->
           <Play v-else :size="17" aria-hidden="true" />
           {{ tool.actionLabel }}
+        </button>
+        <button
+          v-if="tool.supportsJsonDesensitization"
+          class="secondary-action"
+          type="button"
+          :disabled="isRunning"
+          @click="runTool('desensitize')"
+        >
+          <Shield :size="17" aria-hidden="true" />
+          脱敏
         </button>
       </div>
     </form>

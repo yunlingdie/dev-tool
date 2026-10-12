@@ -9,6 +9,7 @@ import {
   createJwt,
   decodeBase64,
   decodeUrlComponent,
+  desensitizeJson,
   encodeBase64,
   encodeUrlComponent,
   formatDateInTimeZone,
@@ -164,6 +165,103 @@ describe('text and JSON utilities', () => {
   it('formats and minifies JSON', () => {
     expect(formatJson('{"a":1,"b":[true]}')).toBe('{\n  "a": 1,\n  "b": [\n    true\n  ]\n}')
     expect(minifyJson('{ "a": 1 }')).toBe('{"a":1}')
+  })
+
+  it('desensitizes JSON leaves while preserving keys and collection structure', () => {
+    const jwt = [
+      encodeBase64UrlFixture({ alg: 'HS256', typ: 'JWT' }),
+      encodeBase64UrlFixture({ sub: 'user-1' }),
+      'signature',
+    ].join('.')
+    const result = desensitizeJson(JSON.stringify({
+      uuid1: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+      uuid4: '550e8400-e29b-41d4-a716-446655440000',
+      uuid7: '0199d645-86f8-7a81-9652-204d8a828677',
+      ulid: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      createdAt: '2026-10-12T09:08:07+08:00',
+      birthday: '1990-02-28',
+      alarm: '09:08:07',
+      email: 'ada@example.com',
+      phone: '+86 138-0013-8000',
+      website: 'https://example.com/users?id=1',
+      ipv4: '192.168.1.20',
+      ipv6: '2001:db8::1',
+      jwt,
+      mac: '00:1A:2B:3C:4D:5E',
+      ipv4Cidr: '10.0.0.0/8',
+      ipv6Cidr: '2001:db8::/32',
+      objectId: '507f1f77bcf86cd799439011',
+      idCard: '11010519491231002X',
+      bankCard: '4111 1111 1111 1111',
+      dataUrl: 'data:text/plain;base64,SGVsbG8=',
+      domain: 'api.example.com',
+      profile: { name: 'Ada', age: 37, active: true, note: null },
+      roles: ['admin', 'developer'],
+      invalidValues: ['2026-02-30', '999.168.1.20', '12345678'],
+    }))
+
+    expect(JSON.parse(result)).toEqual({
+      uuid1: 'uuid1',
+      uuid4: 'uuid4',
+      uuid7: 'uuid7',
+      ulid: 'ulid',
+      createdAt: 'YYYY-MM-DD HH:MM:SS',
+      birthday: 'YYYY-MM-DD',
+      alarm: 'HH:MM:SS',
+      email: 'email',
+      phone: 'phone',
+      website: 'url',
+      ipv4: 'ipv4',
+      ipv6: 'ipv6',
+      jwt: 'jwt',
+      mac: 'mac',
+      ipv4Cidr: 'ipv4_cidr',
+      ipv6Cidr: 'ipv6_cidr',
+      objectId: 'objectid',
+      idCard: 'id_card',
+      bankCard: 'bank_card',
+      dataUrl: 'data_url',
+      domain: 'domain',
+      profile: { name: 'string', age: 'number', active: 'boolean', note: 'null' },
+      roles: ['string', 'string'],
+      invalidValues: ['string', 'string', 'string'],
+    })
+  })
+
+  it('reports each supported UUID version from its canonical version nibble', () => {
+    const uuidValues = Array.from(
+      { length: 8 },
+      (_, index) => `00000000-0000-${index + 1}000-8000-000000000000`,
+    )
+
+    expect(JSON.parse(desensitizeJson(JSON.stringify(uuidValues)))).toEqual([
+      'uuid1',
+      'uuid2',
+      'uuid3',
+      'uuid4',
+      'uuid5',
+      'uuid6',
+      'uuid7',
+      'uuid8',
+    ])
+  })
+
+  it('rejects malformed values for structured sensitive-data markers', () => {
+    const values = [
+      'header_payload.payload.signature',
+      '00:1A:2B:3C:4D',
+      '10.0.0.0/33',
+      '2001:db8::/129',
+      '507f1f77bcf86cd79943901z',
+      '110105194912310021',
+      '4111 1111 1111 1112',
+      'data:text/plain;base64,***',
+      '-invalid.example.com',
+    ]
+
+    expect(JSON.parse(desensitizeJson(JSON.stringify(values)))).toEqual(
+      Array.from({ length: values.length }, () => 'string'),
+    )
   })
 
   it('converts heterogeneous object rows to escaped CSV', () => {
