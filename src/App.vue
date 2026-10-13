@@ -126,6 +126,16 @@ const localizedCategories = computed(() => categories.map((category) => ({
   label: translateCategory(category, language.value),
 })))
 
+/** Describes whether the active workspace keeps processing local or queries a remote service. */
+const processingStatus = computed(() => {
+  // Network-backed tools must disclose that their entered value leaves the browser.
+  if (activeScene.value === 'tools' && selectedTool.value.requiresNetwork) {
+    return t('networkRequest')
+  }
+
+  return t('localProcessing')
+})
+
 /** Returns one display-only localized tool while preserving its canonical route and handler. */
 function displayTool(tool: ToolDefinition): ToolDefinition {
   return localizeTool(tool, language.value)
@@ -429,7 +439,7 @@ onBeforeUnmount(() => {
               @change="selectLanguage"
             />
           </div>
-          <div class="local-status"><span aria-hidden="true" />{{ t('localProcessing') }}</div>
+          <div class="local-status"><span aria-hidden="true" />{{ processingStatus }}</div>
         </div>
       </header>
 

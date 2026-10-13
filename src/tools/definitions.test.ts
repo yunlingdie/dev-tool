@@ -33,6 +33,7 @@ const expectedToolIds = [
   'php-array-json',
   'url-codec',
   'url-parser',
+  'dns-lookup',
   'jwt-parser',
   'jwt-signer',
   'jwt-signature-verifier',
@@ -102,6 +103,23 @@ describe('tool registry', () => {
     await expect(Promise.resolve(dockerTool.execute(defaultValues(dockerTool)))).resolves.toMatchObject({
       output: expect.stringContaining('services:'),
     })
+  })
+
+  it('registers DNS lookup with bounded common record types', () => {
+    const dnsTool = toolById('dns-lookup')
+
+    expect(dnsTool.category.id).toBe('network')
+    expect(dnsTool.requiresNetwork).toBe(true)
+    expect(dnsTool.fields).toEqual([
+      expect.objectContaining({ key: 'domain', type: 'text', defaultValue: 'example.com' }),
+      expect.objectContaining({
+        key: 'recordType',
+        type: 'select',
+        defaultValue: 'A',
+        options: ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA', 'SRV', 'CAA']
+          .map((value) => ({ label: value, value })),
+      }),
+    ])
   })
 
   it('registers audio parsing as an audio-only local file tool', async () => {

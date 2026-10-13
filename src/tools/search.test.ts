@@ -11,6 +11,7 @@ describe('tool search suggestions', () => {
   it('finds catalog tools by normalized titles and aliases', () => {
     expect(suggestionIds('uuid')[0]).toBe('uuid')
     expect(suggestionIds('JSON 格式化')[0]).toBe('json-format')
+    expect(suggestionIds('域名解析')[0]).toBe('dns-lookup')
   })
 
   it('offers focused JSON operations and preserves the exact pasted value', () => {

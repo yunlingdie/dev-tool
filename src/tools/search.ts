@@ -32,6 +32,7 @@ const searchAliases: Record<string, string[]> = {
   'curl-fetch': ['curl 转 fetch', 'curl2fetch'],
   'world-clock': ['世界时区', '世界时间', 'world clock', 'time zone', 'timezone'],
   'url-parser': ['URL 解析', '网址分析'],
+  'dns-lookup': ['域名解析', 'DNS query'],
   'sql-format': ['SQL 格式化', 'SQL 美化'],
 }
 

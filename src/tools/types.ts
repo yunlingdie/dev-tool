@@ -69,6 +69,7 @@ export interface ToolDefinition {
   actionLabel: string
   execute: (values: ToolValues) => ToolResult | Promise<ToolResult>
   supportsJsonDesensitization?: boolean
+  requiresNetwork?: boolean
   autoRun?: boolean
   autoRefreshMs?: number
   outputLabel?: string
