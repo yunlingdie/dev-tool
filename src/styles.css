@@ -1109,6 +1109,18 @@ textarea:focus-visible {
   transform: translateY(0);
 }
 
+.tool-search-header [data-tooltip]::after {
+  top: 50%;
+  right: calc(100% + 7px);
+  bottom: auto;
+  transform: translate(2px, -50%);
+}
+
+.tool-search-header [data-tooltip]:hover::after,
+.tool-search-header [data-tooltip]:focus-visible::after {
+  transform: translate(0, -50%);
+}
+
 .output-actions [data-tooltip]::after,
 .generated-item-copy::after {
   top: 50%;

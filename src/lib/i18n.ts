@@ -172,7 +172,6 @@ const textTranslations: Record<string, string> = {
   字符串: 'String',
   URL: 'URL',
   域名: 'Domain',
-  记录类型: 'Record type',
   JWT: 'JWT',
   'PEM X.509 证书': 'PEM X.509 certificate',
   'PKCS#8 私钥': 'PKCS#8 private key',

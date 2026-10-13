@@ -1,4 +1,6 @@
-export type DnsRecordType = 'A' | 'AAAA' | 'CNAME' | 'MX' | 'NS' | 'TXT' | 'SOA' | 'SRV' | 'CAA'
+export const DNS_RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA', 'SRV', 'CAA'] as const
+
+export type DnsRecordType = (typeof DNS_RECORD_TYPES)[number]
 
 export interface DnsRecord {
   name: string
@@ -7,12 +9,8 @@ export interface DnsRecord {
   data: string
 }
 
-export interface DnsLookupResult {
-  resolver: string
-  query: {
-    name: string
-    type: DnsRecordType
-  }
+export interface DnsRecordLookupResult {
+  type: DnsRecordType
   status: {
     code: number
     name: string
@@ -22,6 +20,14 @@ export interface DnsLookupResult {
   answer: DnsRecord[]
   authority: DnsRecord[]
   comment?: string
+}
+
+export interface DnsLookupResult {
+  resolver: string
+  query: {
+    name: string
+  }
+  results: DnsRecordLookupResult[]
 }
 
 type DnsFetch = (input: string | URL, init?: RequestInit) => Promise<Response>
@@ -139,13 +145,12 @@ function parseDnsRecords(value: unknown): DnsRecord[] {
   return records
 }
 
-/** Queries Google Public DNS over HTTPS and normalizes its JSON response. */
-export async function lookupDns(
-  input: string,
+/** Queries one DNS record type and normalizes its resolver response. */
+async function lookupDnsRecord(
+  name: string,
   type: DnsRecordType,
-  fetcher: DnsFetch = fetch,
-): Promise<DnsLookupResult> {
-  const name = normalizeDnsName(input)
+  fetcher: DnsFetch,
+): Promise<DnsRecordLookupResult> {
   const url = new URL(DNS_RESOLVER_URL)
   url.searchParams.set('name', name)
   url.searchParams.set('type', type)
@@ -156,12 +161,12 @@ export async function lookupDns(
   try {
     response = await fetcher(url, { headers: { Accept: 'application/json' } })
   } catch {
-    throw new Error('DNS 查询失败，请检查网络连接后重试')
+    throw new Error(`DNS ${type} 查询失败，请检查网络连接后重试`)
   }
 
   // Transport failures are distinct from valid DNS error statuses such as NXDOMAIN.
   if (!response.ok) {
-    throw new Error(`DNS 服务请求失败（HTTP ${response.status}）`)
+    throw new Error(`DNS ${type} 服务请求失败（HTTP ${response.status}）`)
   }
 
   let payload: unknown
@@ -169,17 +174,16 @@ export async function lookupDns(
   try {
     payload = await response.json()
   } catch {
-    throw new Error('DNS 服务返回了无效 JSON')
+    throw new Error(`DNS ${type} 服务返回了无效 JSON`)
   }
 
   // A numeric Status field is required to interpret the DNS response code safely.
   if (!isRecord(payload) || typeof payload.Status !== 'number') {
-    throw new Error('DNS 服务返回了无效响应')
+    throw new Error(`DNS ${type} 服务返回了无效响应`)
   }
 
-  const result: DnsLookupResult = {
-    resolver: 'Google Public DNS',
-    query: { name, type },
+  const result: DnsRecordLookupResult = {
+    type,
     status: {
       code: payload.Status,
       name: dnsStatusName(payload.Status),
@@ -196,4 +200,21 @@ export async function lookupDns(
   }
 
   return result
+}
+
+/** Queries every supported DNS record type and preserves their stable display order. */
+export async function lookupDns(
+  input: string,
+  fetcher: DnsFetch = fetch,
+): Promise<DnsLookupResult> {
+  const name = normalizeDnsName(input)
+  const results = await Promise.all(
+    DNS_RECORD_TYPES.map((type) => lookupDnsRecord(name, type, fetcher)),
+  )
+
+  return {
+    resolver: 'Google Public DNS',
+    query: { name },
+    results,
+  }
 }

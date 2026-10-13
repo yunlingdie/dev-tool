@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { lookupDns } from './dns'
+import { DNS_RECORD_TYPES, lookupDns } from './dns'
 
 /** Creates one JSON response for deterministic DNS resolver tests. */
 function jsonResponse(body: unknown, status = 200): Response {
@@ -11,39 +11,69 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('DNS lookup', () => {
-  it('queries the selected record type and normalizes resolver records', async () => {
-    const fetcher = vi.fn(async () => jsonResponse({
-      Status: 0,
-      TC: false,
-      AD: true,
-      Answer: [
-        { name: 'example.com.', type: 5, TTL: 300, data: 'www.example.com.' },
-        { name: 'www.example.com.', type: 1, TTL: 120, data: '192.0.2.10' },
-      ],
-      Authority: [
-        { name: 'example.com.', type: 2, TTL: 3600, data: 'ns1.example.com.' },
-      ],
-    }))
+  it('queries every supported record type and normalizes resolver records', async () => {
+    const fetcher = vi.fn(async (input: string | URL) => {
+      const type = new URL(String(input)).searchParams.get('type')
+      // Only the A fixture has answers so empty record groups remain covered in the same run.
+      const answer = type === 'A'
+        ? [
+            { name: 'example.com.', type: 5, TTL: 300, data: 'www.example.com.' },
+            { name: 'www.example.com.', type: 1, TTL: 120, data: '192.0.2.10' },
+          ]
+        : []
 
-    const result = await lookupDns('Example.COM.', 'A', fetcher)
-    const requestUrl = new URL(String(fetcher.mock.calls[0]?.[0]))
+      return jsonResponse({
+        Status: 0,
+        TC: false,
+        AD: true,
+        Answer: answer,
+        Authority: [
+          { name: 'example.com.', type: 2, TTL: 3600, data: 'ns1.example.com.' },
+        ],
+      })
+    })
 
-    expect(requestUrl.origin + requestUrl.pathname).toBe('https://dns.google/resolve')
-    expect(requestUrl.searchParams.get('name')).toBe('example.com')
-    expect(requestUrl.searchParams.get('type')).toBe('A')
-    expect(requestUrl.searchParams.get('edns_client_subnet')).toBe('0.0.0.0/0')
+    const result = await lookupDns('Example.COM.', fetcher)
+    const requestUrls = fetcher.mock.calls.map(([input]) => new URL(String(input)))
+
+    expect(fetcher).toHaveBeenCalledTimes(DNS_RECORD_TYPES.length)
+    expect(requestUrls.map((url) => url.origin + url.pathname)).toEqual(
+      DNS_RECORD_TYPES.map(() => 'https://dns.google/resolve'),
+    )
+    expect(requestUrls.map((url) => url.searchParams.get('name'))).toEqual(
+      DNS_RECORD_TYPES.map(() => 'example.com'),
+    )
+    expect(requestUrls.map((url) => url.searchParams.get('type'))).toEqual(DNS_RECORD_TYPES)
+    expect(requestUrls.map((url) => url.searchParams.get('edns_client_subnet'))).toEqual(
+      DNS_RECORD_TYPES.map(() => '0.0.0.0/0'),
+    )
     expect(result).toEqual({
       resolver: 'Google Public DNS',
-      query: { name: 'example.com', type: 'A' },
-      status: { code: 0, name: 'NOERROR' },
-      dnssecValidated: true,
-      truncated: false,
-      answer: [
-        { name: 'example.com.', type: 'CNAME', ttl: 300, data: 'www.example.com.' },
-        { name: 'www.example.com.', type: 'A', ttl: 120, data: '192.0.2.10' },
-      ],
-      authority: [
-        { name: 'example.com.', type: 'NS', ttl: 3600, data: 'ns1.example.com.' },
+      query: { name: 'example.com' },
+      results: [
+        {
+          type: 'A',
+          status: { code: 0, name: 'NOERROR' },
+          dnssecValidated: true,
+          truncated: false,
+          answer: [
+            { name: 'example.com.', type: 'CNAME', ttl: 300, data: 'www.example.com.' },
+            { name: 'www.example.com.', type: 'A', ttl: 120, data: '192.0.2.10' },
+          ],
+          authority: [
+            { name: 'example.com.', type: 'NS', ttl: 3600, data: 'ns1.example.com.' },
+          ],
+        },
+        ...DNS_RECORD_TYPES.slice(1).map((type) => ({
+          type,
+          status: { code: 0, name: 'NOERROR' },
+          dnssecValidated: true,
+          truncated: false,
+          answer: [],
+          authority: [
+            { name: 'example.com.', type: 'NS', ttl: 3600, data: 'ns1.example.com.' },
+          ],
+        })),
       ],
     })
   })
@@ -55,12 +85,16 @@ describe('DNS lookup', () => {
       Comment: 'Name Error',
     }))
 
-    await expect(lookupDns('missing.example', 'AAAA', fetcher)).resolves.toMatchObject({
-      status: { code: 3, name: 'NXDOMAIN' },
-      answer: [],
-      authority: [],
-      comment: 'Name Error',
-    })
+    const result = await lookupDns('missing.example', fetcher)
+
+    expect(result.results).toHaveLength(DNS_RECORD_TYPES.length)
+    expect(result.results.every((item) => (
+      item.status.code === 3
+      && item.status.name === 'NXDOMAIN'
+      && item.answer.length === 0
+      && item.authority.length === 0
+      && item.comment === 'Name Error'
+    ))).toBe(true)
   })
 
   it.each([
@@ -71,7 +105,7 @@ describe('DNS lookup', () => {
   ])('rejects invalid domain input %j', async (input, message) => {
     const fetcher = vi.fn()
 
-    await expect(lookupDns(input, 'A', fetcher)).rejects.toThrow(message)
+    await expect(lookupDns(input, fetcher)).rejects.toThrow(message)
     expect(fetcher).not.toHaveBeenCalled()
   })
 
@@ -79,11 +113,11 @@ describe('DNS lookup', () => {
     const failedFetch = vi.fn(async () => jsonResponse({}, 503))
     const malformedFetch = vi.fn(async () => jsonResponse({ Answer: [] }))
 
-    await expect(lookupDns('example.com', 'A', failedFetch)).rejects.toThrow(
-      'DNS 服务请求失败（HTTP 503）',
+    await expect(lookupDns('example.com', failedFetch)).rejects.toThrow(
+      /DNS [A-Z]+ 服务请求失败（HTTP 503）/,
     )
-    await expect(lookupDns('example.com', 'A', malformedFetch)).rejects.toThrow(
-      'DNS 服务返回了无效响应',
+    await expect(lookupDns('example.com', malformedFetch)).rejects.toThrow(
+      /DNS [A-Z]+ 服务返回了无效响应/,
     )
   })
 
@@ -92,8 +126,8 @@ describe('DNS lookup', () => {
       throw new TypeError('Failed to fetch')
     })
 
-    await expect(lookupDns('example.com', 'TXT', fetcher)).rejects.toThrow(
-      'DNS 查询失败，请检查网络连接后重试',
+    await expect(lookupDns('example.com', fetcher)).rejects.toThrow(
+      /DNS [A-Z]+ 查询失败，请检查网络连接后重试/,
     )
   })
 })

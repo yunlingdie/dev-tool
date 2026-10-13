@@ -105,20 +105,13 @@ describe('tool registry', () => {
     })
   })
 
-  it('registers DNS lookup with bounded common record types', () => {
+  it('registers DNS lookup as a domain-only all-record query', () => {
     const dnsTool = toolById('dns-lookup')
 
     expect(dnsTool.category.id).toBe('network')
     expect(dnsTool.requiresNetwork).toBe(true)
     expect(dnsTool.fields).toEqual([
       expect.objectContaining({ key: 'domain', type: 'text', defaultValue: 'example.com' }),
-      expect.objectContaining({
-        key: 'recordType',
-        type: 'select',
-        defaultValue: 'A',
-        options: ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA', 'SRV', 'CAA']
-          .map((value) => ({ label: value, value })),
-      }),
     ])
   })
 

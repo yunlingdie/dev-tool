@@ -93,7 +93,6 @@ import {
 import type { BaseTextEncoding } from '../lib/base-encodings'
 import type { FetchMethod } from '../lib/fetch-request'
 import { lookupDns } from '../lib/dns'
-import type { DnsRecordType } from '../lib/dns'
 import type { RsaModulusLength } from '../lib/special'
 import {
   findWorldClockLocations,
@@ -340,12 +339,9 @@ async function convertCurlToFetch(values: ToolValues): Promise<ToolResult> {
   return output(curlToFetch(textValue(values, 'input')))
 }
 
-/** Resolves one DNS name and record type through the browser-safe DoH client. */
+/** Resolves every supported record type for one DNS name through the browser-safe DoH client. */
 async function lookupDnsTool(values: ToolValues): Promise<ToolResult> {
-  return output(await lookupDns(
-    textValue(values, 'domain'),
-    textValue(values, 'recordType') as DnsRecordType,
-  ))
+  return output(await lookupDns(textValue(values, 'domain')))
 }
 
 /** Generates Fetch source from separately entered URL, Header, Body, and Method fields. */
@@ -777,7 +773,6 @@ export const tools: ToolDefinition[] = [
     id: 'dns-lookup', title: 'DNS 解析', category: categoryById.network, icon: Network,
     fields: [
       { key: 'domain', label: '域名', type: 'text', defaultValue: 'example.com', placeholder: '例如 example.com', wide: true },
-      { key: 'recordType', label: '记录类型', type: 'select', defaultValue: 'A', options: ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA', 'SRV', 'CAA'].map((value) => ({ label: value, value })) },
     ],
     actionLabel: '查询 DNS', requiresNetwork: true, execute: lookupDnsTool,
   },
