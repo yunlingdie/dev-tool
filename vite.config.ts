@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
+import ui from '@nuxt/ui/vite'
 import vue from '@vitejs/plugin-vue'
 
 const CURLCONVERTER_WEB_PARSER = /curlconverter[\\/]dist[\\/]src[\\/]shell[\\/]webParser\.js$/
@@ -36,7 +37,12 @@ function curlconverterWasmBasePlugin(): Plugin {
 
 // Provides the Vue compiler and the test defaults shared by local and CI runs.
 export default defineConfig({
-  plugins: [curlconverterWasmBasePlugin(), vue()],
+  plugins: [curlconverterWasmBasePlugin(), vue(), ui({
+    router: false,
+    // The toolbox owns its persisted theme; Nuxt UI follows the same document class.
+    colorMode: false,
+    ui: { colors: { primary: 'green', neutral: 'zinc' } },
+  })],
   server: {
     allowedHosts: ['web.dev-tool.orb.local'],
   },

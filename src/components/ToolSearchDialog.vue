@@ -1,193 +1,126 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import {
-  Combobox,
-  ComboboxInput,
-  ComboboxOption,
-  ComboboxOptions,
-  Dialog,
-  DialogPanel,
-  DialogTitle,
-  TransitionChild,
-  TransitionRoot,
-} from '@headlessui/vue'
-import { ArrowRight, Search, X } from '@lucide/vue'
-
+import { computed, nextTick, ref, watch } from 'vue'
 import { language, localizeTool, t, translateText } from '../lib/i18n'
 import { getToolSearchSuggestions } from '../tools/search'
 import type { ToolSearchSuggestion } from '../tools/search'
-import type { ToolDefinition } from '../tools/types'
 
-const props = defineProps<{
-  open: boolean
-}>()
-
+const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{
   close: []
   select: [suggestion: ToolSearchSuggestion]
 }>()
-
 const query = ref('')
+const activeIndex = ref(0)
 
-/** Returns the localized display definition for one search suggestion. */
-function displaySuggestionTool(suggestion: ToolSearchSuggestion): ToolDefinition {
-  return localizeTool(suggestion.tool, language.value)
-}
-
-/** Returns a localized explanation for one content-aware or catalog search result. */
-function displaySuggestionReason(suggestion: ToolSearchSuggestion): string {
-  return translateText(suggestion.reason, language.value)
-}
-
-/** Produces content-aware actions or ordinary catalog matches for the current value. */
+/** Preserves content recognition and catalog filtering for the complete multiline query. */
 const suggestions = computed(() => getToolSearchSuggestions(query.value))
 
-/** Labels the result mode without exposing implementation details in the dialog. */
+/** Labels catalog browsing, recognized content actions, and ordinary filtered searches. */
 const resultLabel = computed(() => {
-  // Blank search is a browsable catalog rather than a filtered result set.
+  // An empty query shows the complete catalog.
   if (!query.value.trim()) {
     return t('allTools')
   }
-
-  // Content matches are actions inferred from the pasted value.
+  // Recognized content carries actionable tool handoffs.
   if (suggestions.value[0]?.kind === 'content') {
     return t('suggestedActions')
   }
-
   return t('searchResults')
 })
 
-/** Keeps the search field synchronized with the unmodified text typed or pasted by the user. */
-function updateQuery(event: Event): void {
-  query.value = (event.target as HTMLTextAreaElement).value
-}
-
-/** Requests parent closure from the Headless UI dialog dismissal action. */
-function requestClose(): void {
-  emit('close')
-}
-
-/** Publishes the selected command and leaves route and prefill handling to the application shell. */
-function chooseSuggestion(suggestion: ToolSearchSuggestion | null): void {
-  // Combobox nullable state has no actionable tool to publish.
-  if (!suggestion) {
-    return
+/** Publishes a selected tool and leaves navigation and content handoff to the shell. */
+function chooseSuggestion(index: number): void {
+  const suggestion = suggestions.value[index]
+  // Empty search results have no command to execute.
+  if (suggestion) {
+    emit('select', suggestion)
   }
-
-  emit('select', suggestion)
 }
 
-/** Clears previous search text each time a new command dialog session starts. */
-function resetSearch(isOpen: boolean): void {
-  // Closing is animated in place and should not mutate the departing result list.
-  if (!isOpen) {
-    return
+/** Keeps the active command visible when the keyboard moves through a long result list. */
+async function scrollToActive(): Promise<void> {
+  await nextTick()
+  document.getElementById(`tool-search-option-${activeIndex.value}`)?.scrollIntoView({ block: 'nearest' })
+}
+
+/** Navigates commands while Shift+Enter retains multiline source entry. */
+function handleSearchKey(event: KeyboardEvent): void {
+  // Arrow navigation applies only when a command is available.
+  if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && suggestions.value.length) {
+    event.preventDefault()
+    // Down advances and up moves backward, wrapping within the current results.
+    const direction = event.key === 'ArrowDown' ? 1 : -1
+    activeIndex.value = (activeIndex.value + direction + suggestions.value.length) % suggestions.value.length
+    void scrollToActive()
+  } else if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    // Enter executes the highlighted command; composition and Shift+Enter keep editing text.
+    event.preventDefault()
+    chooseSuggestion(activeIndex.value)
   }
-
-  query.value = ''
 }
 
-watch(() => props.open, resetSearch)
+/** Resets the query only when a new search session opens. */
+watch(() => props.open, (isOpen) => {
+  // Closing preserves departing content during the modal animation.
+  if (isOpen) {
+    query.value = ''
+    activeIndex.value = 0
+  }
+})
+
+/** New results start at the first command so a prior index cannot select a different tool. */
+watch(suggestions, () => {
+  activeIndex.value = 0
+})
 </script>
 
 <template>
-  <TransitionRoot appear :show="open" as="template">
-    <Dialog class="tool-search-dialog" @close="requestClose">
-      <TransitionChild
-        as="template"
-        enter="tool-search-backdrop-transition"
-        enter-from="tool-search-backdrop-hidden"
-        leave="tool-search-backdrop-transition"
-        leave-to="tool-search-backdrop-hidden"
-      >
-        <div class="tool-search-backdrop" aria-hidden="true" />
-      </TransitionChild>
-
-      <div class="tool-search-positioner">
-        <TransitionChild
-          as="template"
-          enter="tool-search-panel-transition"
-          enter-from="tool-search-panel-hidden"
-          leave="tool-search-panel-transition"
-          leave-to="tool-search-panel-hidden"
-        >
-          <DialogPanel class="tool-search-panel">
-            <Combobox
-              :model-value="null"
-              nullable
-              @update:model-value="chooseSuggestion"
-            >
-              <header class="tool-search-header">
-                <div>
-                  <span>{{ t('quickOpen') }}</span>
-                  <DialogTitle id="tool-search-title">{{ t('searchTools') }}</DialogTitle>
-                </div>
-                <button
-                  type="button"
-                  class="icon-button"
-                  :aria-label="t('closeSearch')"
-                  :data-tooltip="t('closeSearch')"
-                  @click="requestClose"
-                >
-                  <X :size="18" aria-hidden="true" />
-                </button>
-              </header>
-
-              <label class="tool-search-input">
-                <Search :size="18" aria-hidden="true" />
-                <span class="sr-only">{{ t('searchToolsOrPaste') }}</span>
-                <ComboboxInput
-                  as="textarea"
-                  rows="3"
-                  :placeholder="t('searchToolsOrPaste')"
-                  autocomplete="off"
-                  spellcheck="false"
-                  autofocus
-                  @change="updateQuery"
-                />
-              </label>
-
-              <div class="tool-search-result-header">
-                <span>{{ resultLabel }}</span>
-                <span>{{ suggestions.length }}</span>
-              </div>
-
-              <!-- Headless UI owns active-option focus while the existing command layout remains unchanged. -->
-              <ComboboxOptions
-                v-if="suggestions.length"
-                id="tool-search-results"
-                static
-                class="tool-search-results"
-              >
-                <ComboboxOption
-                  v-for="suggestion in suggestions"
-                  :key="suggestion.tool.id"
-                  v-slot="{ active }"
-                  :value="suggestion"
-                  as="template"
-                >
-                  <li
-                    class="tool-search-result"
-                    :class="{ 'tool-search-result--active': active }"
-                  >
-                    <span class="tool-search-result-icon">
-                      <component :is="displaySuggestionTool(suggestion).icon" :size="17" aria-hidden="true" />
-                    </span>
-                    <span class="tool-search-result-copy">
-                      <strong>{{ displaySuggestionTool(suggestion).title }}</strong>
-                      <small>{{ displaySuggestionReason(suggestion) }}</small>
-                    </span>
-                    <ArrowRight :size="16" aria-hidden="true" />
-                  </li>
-                </ComboboxOption>
-              </ComboboxOptions>
-
-              <!-- Empty feedback occupies the same stable result area as populated searches. -->
-              <p v-else class="tool-search-empty">{{ t('noMatchingTools') }}</p>
-            </Combobox>
-          </DialogPanel>
-        </TransitionChild>
+  <UModal :open="open" :title="t('searchTools')" :description="t('quickOpen')" :close="{ 'aria-label': t('closeSearch') }" :ui="{ content: 'max-w-2xl', body: 'p-0 sm:p-0' }" @update:open="emit('close')">
+    <template #body>
+      <div class="p-4">
+        <UTextarea
+          v-model="query"
+          :placeholder="t('searchToolsOrPaste')"
+          :aria-label="t('searchToolsOrPaste')"
+          :aria-activedescendant="`tool-search-option-${activeIndex}`"
+          aria-controls="tool-search-results"
+          aria-autocomplete="list"
+          :rows="3"
+          autofocus
+          spellcheck="false"
+          class="w-full"
+          @keydown="handleSearchKey"
+        />
       </div>
-    </Dialog>
-  </TransitionRoot>
+      <div class="flex items-center justify-between border-y border-default px-4 py-2 text-xs text-muted">
+        <span>{{ resultLabel }}</span>
+        <UBadge color="neutral" variant="soft" size="sm">{{ suggestions.length }}</UBadge>
+      </div>
+      <div id="tool-search-results" role="listbox" :aria-label="resultLabel" class="max-h-[45vh] overflow-y-auto p-2">
+        <UButton
+          v-for="(suggestion, index) in suggestions"
+          :id="`tool-search-option-${index}`"
+          :key="suggestion.tool.id"
+          role="option"
+          :aria-selected="activeIndex === index"
+          :tabindex="-1"
+          color="neutral"
+          variant="ghost"
+          class="w-full justify-start p-3"
+          :class="{ 'bg-primary/10': activeIndex === index }"
+          @pointermove="activeIndex = index"
+          @click="chooseSuggestion(index)"
+        >
+          <component :is="suggestion.tool.icon" :size="18" aria-hidden="true" class="shrink-0" />
+          <span class="min-w-0 flex-1 text-left">
+            <span class="block truncate font-medium">{{ localizeTool(suggestion.tool, language).title }}</span>
+            <span class="block truncate text-xs text-muted">{{ translateText(suggestion.reason, language) }}</span>
+          </span>
+          <UIcon name="i-lucide-arrow-right" class="size-4 shrink-0 text-dimmed" />
+        </UButton>
+        <!-- An empty result set needs persistent feedback instead of an inert command list. -->
+        <p v-if="!suggestions.length" class="p-8 text-center text-sm text-muted">{{ t('noMatchingTools') }}</p>
+      </div>
+    </template>
+  </UModal>
 </template>

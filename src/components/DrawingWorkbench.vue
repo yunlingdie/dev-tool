@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, toRef } from 'vue'
-import { Download, Redo2, Trash2, Undo2 } from '@lucide/vue'
 
 import {
   CANVAS_WIDTH,
@@ -108,23 +107,18 @@ defineExpose({ placeTool })
       </div>
 
       <div class="drawing-actions">
-        <button type="button" class="icon-button" :disabled="undoStack.length === 0" :aria-label="labels.undo" :data-tooltip="labels.undo" @click="undo">
-          <Undo2 :size="17" aria-hidden="true" />
-        </button>
-        <button type="button" class="icon-button" :disabled="redoStack.length === 0" :aria-label="labels.redo" :data-tooltip="labels.redo" @click="redo">
-          <Redo2 :size="17" aria-hidden="true" />
-        </button>
-        <button type="button" class="icon-button" :disabled="selectedElementId === null" :aria-label="labels.delete" :data-tooltip="labels.delete" @click="deleteSelected">
-          <Trash2 :size="17" aria-hidden="true" />
-        </button>
-        <span class="drawing-action-divider" aria-hidden="true" />
-        <button type="button" class="drawing-text-action" :disabled="elements.length === 0" @click="clearCanvas">
-          {{ labels.clear }}
-        </button>
-        <button type="button" class="drawing-export-action" :disabled="elements.length === 0" @click="exportSvg">
-          <Download :size="16" aria-hidden="true" />
-          {{ labels.export }}
-        </button>
+        <UTooltip :text="labels.undo">
+          <UButton color="neutral" variant="ghost" icon="i-lucide-undo-2" :disabled="undoStack.length === 0" :aria-label="labels.undo" @click="undo" />
+        </UTooltip>
+        <UTooltip :text="labels.redo">
+          <UButton color="neutral" variant="ghost" icon="i-lucide-redo-2" :disabled="redoStack.length === 0" :aria-label="labels.redo" @click="redo" />
+        </UTooltip>
+        <UTooltip :text="labels.delete">
+          <UButton color="error" variant="ghost" icon="i-lucide-trash-2" :disabled="selectedElementId === null" :aria-label="labels.delete" @click="deleteSelected" />
+        </UTooltip>
+        <USeparator orientation="vertical" class="mx-1 h-6" />
+        <UButton color="neutral" variant="outline" :disabled="elements.length === 0" :label="labels.clear" @click="clearCanvas" />
+        <UButton color="primary" icon="i-lucide-download" :disabled="elements.length === 0" :label="labels.export" @click="exportSvg" />
       </div>
     </div>
 

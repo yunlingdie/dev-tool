@@ -22,7 +22,7 @@
   gap: 8px;
   padding: 10px 7px;
   text-align: center;
-  border: 1px solid #3f3f46;
+  border: 1px solid var(--ui-border);
   cursor: grab;
 }
 
@@ -40,9 +40,9 @@
   width: 42px;
   height: 42px;
   place-items: center;
-  color: #e4e4e7;
-  background: #27272a;
-  border: 1px solid #52525b;
+  color: var(--ui-text);
+  background: var(--ui-bg-elevated);
+  border: 1px solid var(--ui-border-accented);
   border-radius: 4px;
 }
 
@@ -58,7 +58,7 @@
 
 .drawing-workbench {
   display: grid;
-  min-height: calc(100vh - 74px);
+  min-height: calc(100vh - 84px);
   grid-template-rows: auto minmax(0, 1fr);
 }
 
@@ -97,44 +97,6 @@
   min-width: 0;
   align-items: center;
   gap: 4px;
-}
-
-.drawing-action-divider {
-  width: 1px;
-  height: 24px;
-  margin: 0 5px;
-  background: var(--border);
-}
-
-.drawing-text-action,
-.drawing-export-action {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 6px 10px;
-  color: var(--foreground);
-  font-size: 12px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-}
-
-.drawing-text-action:hover:not(:disabled) {
-  background: var(--surface-muted);
-  border-color: var(--muted);
-}
-
-.drawing-export-action {
-  color: var(--primary-foreground);
-  background: var(--primary);
-  border-color: var(--primary);
-}
-
-.drawing-export-action:hover:not(:disabled) {
-  background: var(--primary-hover);
-  border-color: var(--primary-hover);
 }
 
 .drawing-canvas-shell {
@@ -300,8 +262,7 @@
     display: none;
   }
 
-  .drawing-text-action,
-  .drawing-export-action {
+  .drawing-actions > * {
     flex: 0 0 auto;
   }
 

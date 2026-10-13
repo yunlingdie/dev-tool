@@ -1,18 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { Switch } from '@headlessui/vue'
-import {
-  Code2,
-  Menu,
-  Moon,
-  Search,
-  Sun,
-  X,
-} from '@lucide/vue'
+import { en, zh_cn } from '@nuxt/ui/locale'
 
 import DrawingPalette from './components/DrawingPalette.vue'
 import DrawingWorkbench from './components/DrawingWorkbench.vue'
-import HeadlessSelect from './components/HeadlessSelect.vue'
 import ToolSearchDialog from './components/ToolSearchDialog.vue'
 import ToolWorkbench from './components/ToolWorkbench.vue'
 import { language, localizeTool, setLanguage, t, translateCategory } from './lib/i18n'
@@ -64,12 +55,13 @@ let prefillRevision = 0
 /** Applies the selected palette to the document and persists it across reloads. */
 function applyColorTheme(nextTheme: ColorTheme): void {
   document.documentElement.dataset.theme = nextTheme
+  document.documentElement.classList.toggle('dark', nextTheme === 'dark')
   window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme)
 }
 
 watch(colorTheme, applyColorTheme, { immediate: true })
 
-/** Converts the Headless UI switch state into the application's named theme. */
+/** Converts the Nuxt UI switch state into the application's named theme. */
 function setNightMode(enabled: boolean): void {
   // Checked means the user explicitly requested the darker palette.
   if (enabled) {
@@ -141,10 +133,17 @@ function displayTool(tool: ToolDefinition): ToolDefinition {
   return localizeTool(tool, language.value)
 }
 
-/** Returns the registered tools belonging to one navigation category. */
-function toolsForCategory(categoryId: string): ToolDefinition[] {
-  return tools.filter((tool) => tool.category.id === categoryId)
-}
+/** Builds Nuxt UI navigation items while retaining the existing tool selection and history. */
+const navigationGroups = computed(() => localizedCategories.value.map((category) => ({
+  ...category,
+  items: tools.filter((tool) => tool.category.id === category.id).map((tool) => ({
+    label: displayTool(tool).title,
+    toolIcon: tool.icon,
+    active: selectedTool.value.id === tool.id,
+    /** Selects a catalog tool using the shared hash navigation handler. */
+    onSelect: () => selectTool(tool),
+  })),
+})))
 
 /** Adds a tool once while preserving stable history positions and the session limit. */
 function rememberTool(tool: ToolDefinition): void {
@@ -325,179 +324,95 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell">
-    <!-- The backdrop exists only while the small-screen navigation drawer is open. -->
-    <button
-      v-if="mobileNavigationOpen"
-      class="navigation-backdrop"
-      type="button"
-      :aria-label="t('closeNavigation')"
-      @click="mobileNavigationOpen = false"
-    />
+  <UApp :locale="language === 'en' ? en : zh_cn" class="app-shell">
+    <!-- The backdrop dismisses navigation only while the small-screen drawer is open. -->
+    <button v-if="mobileNavigationOpen" class="navigation-backdrop" type="button" :aria-label="t('closeNavigation')" @click="mobileNavigationOpen = false" />
 
-    <aside class="sidebar" :class="{ 'sidebar--open': mobileNavigationOpen }">
+    <aside class="sidebar bg-default border-r border-default" :class="{ 'sidebar--open': mobileNavigationOpen }">
       <div class="brand-row">
-        <div class="brand-mark" aria-hidden="true"><Code2 :size="19" /></div>
+        <div class="brand-mark bg-primary text-inverted"><UIcon name="i-lucide-code-xml" class="size-5" /></div>
         <div class="brand-copy">
-          <strong>Dev Toolbox</strong>
-          <div class="scene-picker">
-            <HeadlessSelect
-              :model-value="activeScene"
-              :options="sceneOptions"
-              :aria-label="t('navigation')"
-              @change="selectScene"
-            />
-          </div>
+          <strong class="text-highlighted">Dev Toolbox</strong>
+          <USelect
+            :model-value="activeScene"
+            :items="sceneOptions"
+            :aria-label="t('navigation')"
+            color="neutral"
+            variant="none"
+            size="sm"
+            class="w-full"
+            @update:model-value="selectScene"
+          />
         </div>
-        <button
-          type="button"
-          class="sidebar-close icon-button"
-          :aria-label="t('closeNavigation')"
-          :data-tooltip="t('closeNavigation')"
-          @click="mobileNavigationOpen = false"
-        >
-          <X :size="18" aria-hidden="true" />
-        </button>
+        <UButton class="sidebar-close" color="neutral" variant="ghost" icon="i-lucide-x" :aria-label="t('closeNavigation')" @click="mobileNavigationOpen = false" />
       </div>
 
-      <!-- Developer tools retain their searchable categorized navigation in the default scene. -->
+      <!-- Developer tools retain their searchable categorized catalog. -->
       <template v-if="activeScene === 'tools'">
-        <button
-          type="button"
-          class="search-trigger"
-          @click="openToolSearch"
-        >
-          <Search :size="16" aria-hidden="true" />
-          <span>{{ t('searchTools') }}</span>
-        </button>
-
-        <nav class="tool-navigation" :aria-label="t('developerTools')">
-          <section v-for="category in localizedCategories" :key="category.id" class="nav-section">
-            <h2>{{ category.label }}</h2>
-            <button
-              v-for="tool in toolsForCategory(category.id)"
-              :key="tool.id"
-              type="button"
-              class="tool-link"
-              :class="{ 'tool-link--active': selectedTool.id === tool.id }"
-              :aria-current="selectedTool.id === tool.id ? 'page' : undefined"
-              @click="selectTool(tool)"
-            >
-              <component :is="tool.icon" :size="16" aria-hidden="true" />
-              <span>{{ displayTool(tool).title }}</span>
-            </button>
+        <UButton color="neutral" variant="outline" icon="i-lucide-search" class="search-trigger" :label="t('searchTools')" @click="openToolSearch">
+          <template #trailing><UKbd value="/" /></template>
+        </UButton>
+        <div class="tool-navigation" :aria-label="t('developerTools')">
+          <section v-for="category in navigationGroups" :key="category.id" class="nav-section">
+            <h2 class="text-dimmed">{{ category.label }}</h2>
+            <UNavigationMenu :items="category.items" orientation="vertical" color="primary" :aria-label="category.label">
+              <template #item-leading="{ item }">
+                <component :is="item.toolIcon" :size="16" aria-hidden="true" class="shrink-0" />
+              </template>
+            </UNavigationMenu>
           </section>
-        </nav>
+        </div>
       </template>
-
-      <!-- Drawing navigation exposes draggable materials without a persistent tool selection. -->
+      <!-- Drawing navigation exposes draggable materials for the canvas scene. -->
       <DrawingPalette v-else @place="placeDrawingTool" />
     </aside>
 
     <main class="main-area">
-      <header class="tool-header">
-        <button
-          type="button"
-          class="mobile-menu icon-button"
-          :aria-label="t('openNavigation')"
-          :data-tooltip="t('navigation')"
-          @click="mobileNavigationOpen = true"
-        >
-          <Menu :size="19" aria-hidden="true" />
-        </button>
-
+      <header class="tool-header bg-default border-b border-default">
+        <UButton class="mobile-menu" color="neutral" variant="ghost" icon="i-lucide-menu" :aria-label="t('openNavigation')" @click="mobileNavigationOpen = true" />
         <div class="tool-heading">
-          <!-- Each scene exposes a concise location and title in the shared page header. -->
+          <!-- The drawing scene uses its own location and title in the shared header. -->
           <template v-if="activeScene === 'drawing'">
-            <span>{{ sceneLabels.drawingCategory }}</span>
-            <h1>{{ sceneLabels.drawingTitle }}</h1>
+            <span class="text-muted">{{ sceneLabels.drawingCategory }}</span>
+            <h1 class="text-highlighted">{{ sceneLabels.drawingTitle }}</h1>
           </template>
           <template v-else>
-            <span>{{ displayTool(selectedTool).category.label }}</span>
-            <h1>{{ displayTool(selectedTool).title }}</h1>
+            <span class="text-muted">{{ displayTool(selectedTool).category.label }}</span>
+            <h1 class="text-highlighted">{{ displayTool(selectedTool).title }}</h1>
           </template>
         </div>
-
         <div class="tool-header-actions">
-          <div class="theme-picker">
-            <Sun :size="15" aria-hidden="true" />
-            <Switch
-              :model-value="colorTheme === 'dark'"
-              class="headless-switch theme-switch"
-              :aria-label="themeToggleLabel"
-              @update:model-value="setNightMode"
-            >
-              <span class="headless-switch-thumb" aria-hidden="true" />
-            </Switch>
-            <Moon :size="15" aria-hidden="true" />
-          </div>
-          <div class="language-picker">
-            <HeadlessSelect
-              :model-value="language"
-              :options="languageOptions"
-              :aria-label="t('websiteLanguage')"
-              @change="selectLanguage"
-            />
-          </div>
-          <div class="local-status"><span aria-hidden="true" />{{ processingStatus }}</div>
+          <UTooltip :text="themeToggleLabel">
+            <USwitch :model-value="colorTheme === 'dark'" color="primary" size="sm" :aria-label="themeToggleLabel" checked-icon="i-lucide-moon" unchecked-icon="i-lucide-sun" @update:model-value="setNightMode" />
+          </UTooltip>
+          <USelect :model-value="language" :items="languageOptions" :aria-label="t('websiteLanguage')" color="neutral" size="sm" class="language-picker" @update:model-value="selectLanguage" />
+          <UBadge class="local-status" color="neutral" variant="subtle" :label="processingStatus" />
         </div>
       </header>
 
-      <!-- Tool history belongs to developer tools; drawing keeps its full height for the canvas. -->
-      <nav v-if="activeScene === 'tools'" class="tool-history" :aria-label="t('toolHistory')">
-        <span class="tool-history-label">{{ t('history') }}</span>
+      <!-- History tabs select cached workbenches and provide a separate close action. -->
+      <nav v-if="activeScene === 'tools'" class="tool-history border-b border-default" :aria-label="t('toolHistory')">
+        <span class="tool-history-label text-dimmed">{{ t('history') }}</span>
         <div class="tool-history-items">
-          <div
-            v-for="tool in openedTools"
-            :key="tool.id"
-            class="tool-history-item"
-            :class="{ 'tool-history-item--active': selectedTool.id === tool.id }"
-          >
-            <button
-              type="button"
-              class="tool-history-select"
-              :aria-current="selectedTool.id === tool.id ? 'page' : undefined"
-              @click="selectTool(tool)"
-            >
+          <UFieldGroup v-for="tool in openedTools" :key="tool.id" class="shrink-0">
+            <!-- The selected history entry uses the primary accent; inactive entries stay neutral. -->
+            <UButton :color="selectedTool.id === tool.id ? 'primary' : 'neutral'" :variant="selectedTool.id === tool.id ? 'soft' : 'ghost'" size="sm" :aria-current="selectedTool.id === tool.id ? 'page' : undefined" @click="selectTool(tool)">
               <component :is="tool.icon" :size="14" aria-hidden="true" />
               <span>{{ displayTool(tool).title }}</span>
-            </button>
-            <button
-              type="button"
-              class="tool-history-close"
-              :aria-label="`${t('close')} ${displayTool(tool).title}`"
-              :data-tooltip="`${t('close')} ${displayTool(tool).title}`"
-              @click="closeHistoryTool(tool)"
-            >
-              <X :size="13" aria-hidden="true" />
-            </button>
-          </div>
+            </UButton>
+            <UTooltip :text="`${t('close')} ${displayTool(tool).title}`">
+              <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-x" :aria-label="`${t('close')} ${displayTool(tool).title}`" @click="closeHistoryTool(tool)" />
+            </UTooltip>
+          </UFieldGroup>
         </div>
       </nav>
 
-      <!-- Both scenes stay mounted so switching does not discard temporary canvas or form state. -->
-      <DrawingWorkbench
-        ref="drawingWorkbench"
-        v-show="activeScene === 'drawing'"
-        :active="activeScene === 'drawing'"
-      />
+      <!-- Both scenes stay mounted so switching preserves temporary canvas and form state. -->
+      <DrawingWorkbench ref="drawingWorkbench" v-show="activeScene === 'drawing'" :active="activeScene === 'drawing'" />
       <div v-show="activeScene === 'tools'" class="content-frame">
-          <!-- Open workbenches stay mounted for state preservation; closing a tab unmounts its state. -->
-          <ToolWorkbench
-            v-for="tool in openedTools"
-            v-show="selectedTool.id === tool.id"
-            :key="tool.id"
-            :tool="displayTool(tool)"
-            :prefill="toolPrefills[tool.id]"
-            :active="selectedTool.id === tool.id"
-          />
-        </div>
+        <ToolWorkbench v-for="tool in openedTools" v-show="selectedTool.id === tool.id" :key="tool.id" :tool="displayTool(tool)" :prefill="toolPrefills[tool.id]" :active="selectedTool.id === tool.id" />
+      </div>
     </main>
-
-    <ToolSearchDialog
-      :open="searchDialogOpen"
-      @close="closeToolSearch"
-      @select="selectSearchSuggestion"
-    />
-  </div>
+    <ToolSearchDialog :open="searchDialogOpen" @close="closeToolSearch" @select="selectSearchSuggestion" />
+  </UApp>
 </template>

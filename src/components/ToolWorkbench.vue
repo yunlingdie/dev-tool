@@ -1,20 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { Check, Copy, Download, LoaderCircle, Play, Shield } from '@lucide/vue'
-import { Switch } from '@headlessui/vue'
 
 import AudioAnalysisViewer from './AudioAnalysisViewer.vue'
-import HeadlessSelect from './HeadlessSelect.vue'
 import JsonCodeViewer from './JsonCodeViewer.vue'
 import { desensitizeJson } from '../lib/core'
 import { language, t, translateText } from '../lib/i18n'
 import type {
   ToolDefinition,
-  ToolField,
   ToolOutput,
   ToolPrefill,
   ToolResult,
-  ToolValue,
   ToolValues,
 } from '../tools/types'
 
@@ -411,123 +406,85 @@ function downloadOutput(item: ToolOutput): void {
     URL.revokeObjectURL(objectUrl)
   }
 }
-
-/** Stores the single File selected by a native file input. */
-function updateFile(field: ToolField, event: Event): void {
-  const input = event.target as HTMLInputElement
-
-  // Clearing the native picker should also clear the reactive field value.
-  if (!input.files?.[0]) {
-    values[field.key] = null
-    return
-  }
-
-  values[field.key] = input.files[0]
-}
-
-/** Writes a native text or select value into the generic tool field map. */
-function updateValue(field: ToolField, event: Event): void {
-  const control = event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-  let value: ToolValue = control.value
-
-  // Number inputs must remain numeric for calculations and bound validation.
-  if (field.type === 'number') {
-    value = control.valueAsNumber
-  }
-
-  values[field.key] = value
-}
 </script>
 
 <template>
   <section class="workbench" :aria-label="t('toolWorkspace')">
-    <form class="tool-form" @submit.prevent="runTool()">
+    <UForm :state="values" :loading-auto="false" class="tool-form" @submit="runTool()">
       <div class="field-grid">
-        <div
+        <UFormField
           v-for="field in visibleFields"
           :key="field.key"
-          class="field"
+          :name="field.key"
+          :label="field.label"
+          class="min-w-0"
           :class="{ 'field--wide': field.wide }"
         >
-          <label :for="`${tool.id}-${field.key}`">{{ field.label }}</label>
-
-          <!-- Select fields present bounded option sets without free-form ambiguity. -->
-          <HeadlessSelect
+          <!-- Select fields constrain values to the tool's declared options. -->
+          <USelect
             v-if="field.type === 'select'"
-            :id="`${tool.id}-${field.key}`"
             :model-value="String(values[field.key])"
-            :options="field.options ?? []"
-            @change="values[field.key] = $event"
+            :items="field.options ?? []"
+            class="w-full"
+            @update:model-value="values[field.key] = $event"
           />
-
-          <!-- Textareas preserve multiline source formats and code. -->
-          <textarea
+          <!-- Multiline source stays intact for parsers, keys, and code tools. -->
+          <UTextarea
             v-else-if="field.type === 'textarea'"
-            :id="`${tool.id}-${field.key}`"
-            :value="values[field.key]"
+            :model-value="String(values[field.key] ?? '')"
             :placeholder="field.placeholder"
-            rows="10"
+            :rows="10"
             spellcheck="false"
-            @input="updateValue(field, $event)"
+            class="w-full"
+            :ui="{ base: 'font-mono text-sm' }"
+            @update:model-value="values[field.key] = $event"
           />
-
-          <!-- File inputs keep binary data local to the browser. -->
-          <input
+          <!-- Uploads keep the original File object local for binary and audio tools. -->
+          <UFileUpload
             v-else-if="field.type === 'file'"
-            :id="`${tool.id}-${field.key}`"
-            type="file"
+            :model-value="values[field.key] as File | null"
             :accept="field.accept"
-            @change="updateFile(field, $event)"
-          >
-
-          <!-- Number inputs expose native bounds for counts and bases. -->
-          <input
+            :label="field.label"
+            :file-image="false"
+            :aria-label="field.label"
+            layout="list"
+            class="w-full"
+            @update:model-value="values[field.key] = $event"
+          />
+          <!-- Numeric controls retain native count bounds and emit numbers. -->
+          <UInput
             v-else-if="field.type === 'number'"
-            :id="`${tool.id}-${field.key}`"
+            :model-value="values[field.key] as number"
             type="number"
-            :value="values[field.key]"
             :placeholder="field.placeholder"
             :min="field.min"
             :max="field.max"
-            @input="updateValue(field, $event)"
-          >
-
-          <!-- Remaining scalar fields use the exact native text or date input type. -->
-          <input
+            class="w-full"
+            @update:model-value="values[field.key] = $event"
+          />
+          <!-- Remaining fields accept plain text without changing parser semantics. -->
+          <UInput
             v-else
-            :id="`${tool.id}-${field.key}`"
-            :type="field.type"
-            :value="values[field.key]"
+            :model-value="String(values[field.key] ?? '')"
             :placeholder="field.placeholder"
             spellcheck="false"
-            @input="updateValue(field, $event)"
-          >
-        </div>
+            class="w-full"
+            @update:model-value="values[field.key] = $event"
+          />
+        </UFormField>
       </div>
 
-      <!-- JSON desensitization shares the existing action row, including on auto-run formatting. -->
+      <!-- Formatting tools expose desensitization alongside manual execution where supported. -->
       <div v-if="!tool.autoRun || tool.supportsJsonDesensitization" class="action-row">
-        <button v-if="!tool.autoRun" class="primary-action" type="submit" :disabled="isRunning">
-          <!-- Running tools use motion to communicate that the command is still active. -->
-          <LoaderCircle v-if="isRunning" :size="17" class="spin" aria-hidden="true" />
-          <!-- Idle tools use the conventional play icon for execution. -->
-          <Play v-else :size="17" aria-hidden="true" />
-          {{ tool.actionLabel }}
-        </button>
-        <button
-          v-if="tool.supportsJsonDesensitization"
-          class="secondary-action"
-          type="button"
-          :disabled="isRunning"
-          @click="runTool('desensitize')"
-        >
-          <Shield :size="17" aria-hidden="true" />
-          脱敏
-        </button>
+        <!-- Auto-run tools process field changes without an extra execute button. -->
+        <UButton v-if="!tool.autoRun" type="submit" color="primary" icon="i-lucide-play" :loading="isRunning" :label="tool.actionLabel" class="primary-action" />
+        <!-- Desensitization is available only on the existing JSON-producing tool contract. -->
+        <UButton v-if="tool.supportsJsonDesensitization" color="neutral" variant="outline" icon="i-lucide-shield" :disabled="isRunning" :label="translateText('脱敏')" @click="runTool('desensitize')" />
       </div>
-    </form>
+    </UForm>
 
-    <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+    <!-- Tool failures stay visible next to the input that produced them. -->
+    <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" :description="error" role="alert" />
 
     <!-- Audio results use one shared native player and interactive waveform. -->
     <AudioAnalysisViewer
@@ -537,54 +494,35 @@ function updateValue(field: ToolField, event: Event): void {
     />
 
     <div class="output-list">
-      <section
+      <UCard
         v-for="(item, index) in displayedOutputs"
         :key="`${item.label}-${index}`"
+        as="section"
         class="output-panel"
+        :ui="{ header: 'p-3 sm:px-4', body: 'p-0 sm:p-0' }"
         :aria-label="`${item.label} ${t('result')}`"
       >
-        <header class="output-header">
-          <div>
-            <span class="output-label">{{ item.label }}</span>
-            <span class="output-meta">{{ item.content.length.toLocaleString() }} {{ t('chars') }}</span>
+        <template #header>
+          <div class="output-header">
+            <div>
+              <span class="output-label">{{ item.label }}</span>
+              <span class="output-meta">{{ item.content.length.toLocaleString() }} {{ t('chars') }}</span>
+            </div>
+            <!-- Diff display mode is colocated with its result so toggling never requires another comparison. -->
+            <div v-if="item.language === 'diff' && item.content" class="diff-only-toggle">
+              <USwitch :model-value="item.diffOnly === true" color="primary" size="sm" :label="translateText('只显示不一样的地方')" @update:model-value="setDiffOnly" />
+            </div>
+            <div class="output-actions">
+              <UTooltip :text="`${t('copyOutput')}: ${item.label}`">
+                <!-- A checked icon briefly identifies the output that was copied. -->
+                <UButton color="neutral" variant="ghost" size="sm" :icon="copiedOutputIndex === index ? 'i-lucide-check' : 'i-lucide-copy'" :aria-label="`${t('copyOutput')}: ${item.label}`" :disabled="!item.content" @click="copyOutput(item, index)" />
+              </UTooltip>
+              <UTooltip :text="`${t('downloadOutput')}: ${item.label}`">
+                <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-download" :aria-label="`${t('downloadOutput')}: ${item.label}`" :disabled="!item.content && !item.downloadHref" @click="downloadOutput(item)" />
+              </UTooltip>
+            </div>
           </div>
-          <!-- Diff display mode is colocated with its result so toggling never requires another comparison. -->
-          <div v-if="item.language === 'diff' && item.content" class="diff-only-toggle">
-            <Switch
-              :model-value="item.diffOnly === true"
-              class="headless-switch"
-              @update:model-value="setDiffOnly"
-            >
-              <span class="headless-switch-thumb" aria-hidden="true" />
-            </Switch>
-            <span>{{ translateText('只显示不一样的地方') }}</span>
-          </div>
-          <div class="output-actions">
-            <button
-              type="button"
-              class="icon-button"
-              :data-tooltip="`${t('copyOutput')}: ${item.label}`"
-              :aria-label="`${t('copyOutput')}: ${item.label}`"
-              :disabled="!item.content"
-              @click="copyOutput(item, index)"
-            >
-              <!-- Successful copy feedback appears only on the output that was copied. -->
-              <Check v-if="copiedOutputIndex === index" :size="17" aria-hidden="true" />
-              <!-- Outputs that were not just copied retain the familiar copy symbol. -->
-              <Copy v-else :size="17" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              class="icon-button"
-              :data-tooltip="`${t('downloadOutput')}: ${item.label}`"
-              :aria-label="`${t('downloadOutput')}: ${item.label}`"
-              :disabled="!item.content && !item.downloadHref"
-              @click="downloadOutput(item)"
-            >
-              <Download :size="17" aria-hidden="true" />
-            </button>
-          </div>
-        </header>
+        </template>
         <!-- List results expose each value as a separately copyable row. -->
         <ul v-if="item.items?.length" class="generated-items">
           <li
@@ -597,22 +535,10 @@ function updateValue(field: ToolField, event: Event): void {
               <span class="generated-item-label">{{ item.itemLabels?.[itemIndex] }}</span>
               <code>{{ generatedItem }}</code>
             </div>
-            <button
-              type="button"
-              class="icon-button generated-item-copy"
-              :data-tooltip="t('copyItem')"
-              :aria-label="t('copyItemNumber').replace('{number}', String(itemIndex + 1))"
-              @click="copyGeneratedItem(generatedItem, index, itemIndex)"
-            >
-              <!-- Successful feedback appears only on the row that was copied. -->
-              <Check
-                v-if="copiedItemKey === generatedItemKey(index, itemIndex)"
-                :size="16"
-                aria-hidden="true"
-              />
-              <!-- Rows that were not just copied retain the familiar copy symbol. -->
-              <Copy v-else :size="16" aria-hidden="true" />
-            </button>
+            <UTooltip :text="t('copyItem')">
+              <!-- Copied rows show confirmation without changing the generated value. -->
+              <UButton color="neutral" variant="ghost" size="sm" :icon="copiedItemKey === generatedItemKey(index, itemIndex) ? 'i-lucide-check' : 'i-lucide-copy'" :aria-label="t('copyItemNumber').replace('{number}', String(itemIndex + 1))" @click="copyGeneratedItem(generatedItem, index, itemIndex)" />
+            </UTooltip>
           </li>
         </ul>
         <!-- JSON results use a read-only syntax viewer with bracket-range matching. -->
@@ -644,7 +570,7 @@ function updateValue(field: ToolField, event: Event): void {
         </div>
         <!-- Non-list results retain the existing multiline code output. -->
         <pre v-else><code>{{ item.content || t('waitExecution') }}</code></pre>
-      </section>
+      </UCard>
     </div>
   </section>
 </template>

@@ -119,17 +119,19 @@ onBeforeUnmount(disposeAudio)
 </script>
 
 <template>
-  <section class="audio-result-panel" aria-label="音频播放与波形">
-    <header class="audio-result-header">
-      <div class="audio-result-identity">
-        <AudioLines :size="18" aria-hidden="true" />
-        <div>
-          <span>音频预览</span>
-          <strong>{{ analysis.file.name }}</strong>
+  <UCard as="section" class="audio-result-panel" aria-label="音频播放与波形" :ui="{ header: 'p-3 sm:px-4', body: 'p-4 sm:p-4' }">
+    <template #header>
+      <div class="audio-result-header">
+        <div class="audio-result-identity">
+          <AudioLines :size="18" aria-hidden="true" />
+          <div>
+            <span>音频预览</span>
+            <strong>{{ analysis.file.name }}</strong>
+          </div>
         </div>
+        <code>{{ formatAudioDuration(analysis.durationSeconds) }}</code>
       </div>
-      <code>{{ formatAudioDuration(analysis.durationSeconds) }}</code>
-    </header>
+    </template>
     <div class="audio-result-body">
       <audio
         ref="audioElement"
@@ -145,9 +147,7 @@ onBeforeUnmount(disposeAudio)
         aria-label="音频波形，可点击或拖动定位"
       />
       <!-- Player initialization errors belong next to the media surface that failed. -->
-      <p v-if="waveformError" class="audio-waveform-error" role="alert">
-        {{ waveformError }}
-      </p>
+      <UAlert v-if="waveformError" color="error" variant="soft" :description="waveformError" role="alert" />
     </div>
-  </section>
+  </UCard>
 </template>

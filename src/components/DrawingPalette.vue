@@ -108,7 +108,9 @@ function startToolDrag(event: DragEvent, toolId: DrawingToolId): void {
     <section v-for="group in drawingToolGroups" :key="group.label" class="nav-section">
       <h2>{{ group.label }}</h2>
       <div class="drawing-tool-grid">
-        <button
+        <UButton
+          color="neutral"
+          variant="outline"
           v-for="drawingTool in group.tools"
           :key="drawingTool.id"
           type="button"
@@ -124,7 +126,7 @@ function startToolDrag(event: DragEvent, toolId: DrawingToolId): void {
             <component :is="drawingTool.icon" :size="22" />
           </span>
           <span>{{ drawingTool.label }}</span>
-        </button>
+        </UButton>
       </div>
     </section>
   </nav>
