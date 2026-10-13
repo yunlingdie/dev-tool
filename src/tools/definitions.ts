@@ -92,7 +92,7 @@ import {
 } from '../lib/special'
 import type { BaseTextEncoding } from '../lib/base-encodings'
 import type { FetchMethod } from '../lib/fetch-request'
-import { lookupDns } from '../lib/dns'
+import { formatDnsLookup, lookupDns } from '../lib/dns'
 import type { RsaModulusLength } from '../lib/special'
 import {
   findWorldClockLocations,
@@ -339,9 +339,9 @@ async function convertCurlToFetch(values: ToolValues): Promise<ToolResult> {
   return output(curlToFetch(textValue(values, 'input')))
 }
 
-/** Resolves every supported record type for one DNS name through the browser-safe DoH client. */
+/** Resolves all supported DNS types and displays populated answer groups as readable text. */
 async function lookupDnsTool(values: ToolValues): Promise<ToolResult> {
-  return output(await lookupDns(textValue(values, 'domain')))
+  return output(formatDnsLookup(await lookupDns(textValue(values, 'domain'))))
 }
 
 /** Generates Fetch source from separately entered URL, Header, Body, and Method fields. */

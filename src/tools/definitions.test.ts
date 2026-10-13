@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { validate as validateUuid, version as uuidVersion } from 'uuid'
 
 import { tools } from './definitions'
@@ -113,6 +113,26 @@ describe('tool registry', () => {
     expect(dnsTool.fields).toEqual([
       expect.objectContaining({ key: 'domain', type: 'text', defaultValue: 'example.com' }),
     ])
+  })
+
+  it('renders DNS lookup as populated record lines instead of a JSON report', async () => {
+    /** Supplies deterministic resolver answers without querying an external DNS service. */
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL) => {
+      const type = new URL(String(input)).searchParams.get('type')
+      // Only the A query resolves a record; other types must not create output lines.
+      const answer = type === 'A'
+        ? [{ name: 'example.com.', type: 1, TTL: 300, data: '192.0.2.10' }]
+        : []
+      return new Response(JSON.stringify({ Status: 0, Answer: answer }))
+    }))
+
+    try {
+      const result = await toolById('dns-lookup').execute({ domain: 'example.com' })
+
+      expect(result).toEqual({ output: 'A: 192.0.2.10' })
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('registers audio parsing as an audio-only local file tool', async () => {

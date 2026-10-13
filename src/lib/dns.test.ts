@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { DNS_RECORD_TYPES, lookupDns } from './dns'
+import { DNS_RECORD_TYPES, formatDnsLookup, lookupDns } from './dns'
 
 /** Creates one JSON response for deterministic DNS resolver tests. */
 function jsonResponse(body: unknown, status = 200): Response {
@@ -11,6 +11,53 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('DNS lookup', () => {
+  it('formats actual answers by record type, omits empty types, and deduplicates aliases', async () => {
+    const fetcher = vi.fn(async (input: string | URL) => {
+      const type = new URL(String(input)).searchParams.get('type')
+      const answers: Record<string, unknown[]> = {
+        A: [
+          { name: 'example.com.', type: 5, TTL: 300, data: 'alias.example.com.' },
+          { name: 'alias.example.com.', type: 1, TTL: 300, data: '192.0.2.10' },
+          { name: 'alias.example.com.', type: 1, TTL: 300, data: '192.0.2.11' },
+        ],
+        AAAA: [{ name: 'alias.example.com.', type: 28, TTL: 300, data: '2001:db8::1' }],
+        CNAME: [{ name: 'example.com.', type: 5, TTL: 300, data: 'alias.example.com.' }],
+        MX: [{ name: 'example.com.', type: 15, TTL: 300, data: '10 mail.example.com.' }],
+        TXT: [{ name: 'example.com.', type: 16, TTL: 300, data: '"v=spf1 -all"' }],
+      }
+
+      return jsonResponse({
+        Status: 0,
+        Answer: answers[type ?? ''] ?? [],
+        Authority: [{ name: 'example.com.', type: 6, TTL: 300, data: 'negative-answer SOA' }],
+      })
+    })
+
+    expect(formatDnsLookup(await lookupDns('example.com', fetcher))).toBe([
+      'A: 192.0.2.10, 192.0.2.11',
+      'AAAA: 2001:db8::1',
+      'CNAME: alias.example.com.',
+      'MX: 10 mail.example.com.',
+      'TXT: "v=spf1 -all"',
+    ].join('\n'))
+  })
+
+  it('reports empty answers without presenting authority records as resolved data', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      Status: 0,
+      Authority: [{ name: 'example.com.', type: 6, TTL: 300, data: 'negative-answer SOA' }],
+    }))
+
+    expect(formatDnsLookup(await lookupDns('example.com', fetcher))).toBe('未找到 DNS 解析记录')
+  })
+
+  it('retains a resolver failure status when no answers can be formatted', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ Status: 3 }))
+
+    expect(formatDnsLookup(await lookupDns('missing.example', fetcher)))
+      .toBe('未找到 DNS 解析记录（NXDOMAIN）')
+  })
+
   it('queries every supported record type and normalizes resolver records', async () => {
     const fetcher = vi.fn(async (input: string | URL) => {
       const type = new URL(String(input)).searchParams.get('type')

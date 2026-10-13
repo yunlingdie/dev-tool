@@ -30,6 +30,43 @@ export interface DnsLookupResult {
   results: DnsRecordLookupResult[]
 }
 
+/** Formats actual DNS answers as one readable line per populated record type. */
+export function formatDnsLookup(result: DnsLookupResult): string {
+  const answers = result.results.flatMap((item) => item.answer)
+  const lines: string[] = []
+
+  for (const type of DNS_RECORD_TYPES) {
+    // Alias chains can repeat across queries, so each type lists its distinct nonempty values once.
+    const values = new Set(answers
+      .filter((record) => record.type === type && record.data.length > 0)
+      .map((record) => record.data))
+
+    // Missing record types must not create an empty output row.
+    if (values.size === 0) {
+      continue
+    }
+
+    lines.push(`${type}: ${[...values].join(', ')}`)
+  }
+
+  // A completed lookup with answers displays only the populated record rows.
+  if (lines.length > 0) {
+    return lines.join('\n')
+  }
+
+  // DNS error statuses remain distinguishable from a successful lookup with no answers.
+  const statuses = [...new Set(result.results
+    .filter((item) => item.status.code !== 0)
+    .map((item) => item.status.name))]
+
+  // Only resolver failures append status details to the empty-result message.
+  if (statuses.length > 0) {
+    return `未找到 DNS 解析记录（${statuses.join(', ')}）`
+  }
+
+  return '未找到 DNS 解析记录'
+}
+
 type DnsFetch = (input: string | URL, init?: RequestInit) => Promise<Response>
 
 const DNS_RESOLVER_URL = 'https://dns.google/resolve'
@@ -113,7 +150,7 @@ function dnsTypeName(code: number): string {
   return DNS_TYPE_NAMES[code] ?? `TYPE${code}`
 }
 
-/** Converts one resolver section into stable records for the JSON output panel. */
+/** Converts one resolver section into stable records for the DNS result formatter. */
 function parseDnsRecords(value: unknown): DnsRecord[] {
   // Missing sections are valid when the resolver has no matching records.
   if (!Array.isArray(value)) {
