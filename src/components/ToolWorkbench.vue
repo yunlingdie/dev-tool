@@ -152,6 +152,26 @@ const displayedOutputs = computed<ToolOutput[]>(() => {
   ]
 })
 
+/** Stores an edited result without changing the source fields used to generate it. */
+function updateOutputContent(index: number, content: string): void {
+  const outputs = result.value.outputs
+
+  // Named output panels update only their matching result entry.
+  if (outputs?.length) {
+    const target = outputs[index]
+
+    // A stale editor event cannot update an output removed by a newer execution.
+    if (!target) {
+      return
+    }
+
+    target.content = content
+    return
+  }
+
+  result.value.output = content
+}
+
 /** Maps one unified diff prefix to its Git-style presentation class. */
 function diffLineClass(line: string): string {
   // Plus-prefixed rows represent content introduced by the new text.
@@ -541,10 +561,11 @@ function downloadOutput(item: ToolOutput): void {
             </UTooltip>
           </li>
         </ul>
-        <!-- JSON results use a read-only syntax viewer with bracket-range matching. -->
+        <!-- JSON results stay editable without writing changes back to the source form. -->
         <JsonCodeViewer
           v-else-if="item.language === 'json' && item.content"
           :content="item.content"
+          @update:content="updateOutputContent(index, $event)"
         />
         <!-- Unified diff rows retain text markers while color separates additions and removals. -->
         <div v-else-if="item.language === 'diff' && item.content" class="diff-output-wrap">

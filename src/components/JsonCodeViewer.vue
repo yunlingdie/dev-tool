@@ -10,9 +10,13 @@ import type { MatchResult } from '@codemirror/language'
 import { EditorState } from '@codemirror/state'
 import type { Range } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
+import type { ViewUpdate } from '@codemirror/view'
 
 const props = defineProps<{
   content: string
+}>()
+const emit = defineEmits<{
+  'update:content': [content: string]
 }>()
 
 const host = ref<HTMLDivElement | null>(null)
@@ -107,7 +111,17 @@ const viewerTheme = EditorView.theme({
   },
 })
 
-/** Creates the read-only JSON viewer after its host element is mounted. */
+/** Publishes user edits while keeping the source tool input independent. */
+function publishDocumentChange(update: ViewUpdate): void {
+  // Selection and focus changes do not alter the editable JSON result.
+  if (!update.docChanged) {
+    return
+  }
+
+  emit('update:content', update.state.doc.toString())
+}
+
+/** Creates the editable JSON viewer after its host element is mounted. */
 function createEditor(): void {
   // Vue can unmount the component before the mount callback receives a usable host.
   if (!host.value) {
@@ -121,14 +135,12 @@ function createEditor(): void {
         json(),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         bracketMatching({ renderMatch: renderBracketRange }),
-        EditorState.readOnly.of(true),
-        EditorView.editable.of(false),
+        EditorView.updateListener.of(publishDocumentChange),
         EditorView.lineWrapping,
         EditorView.contentAttributes.of({
           role: 'textbox',
           'aria-label': 'JSON 输出',
-          'aria-readonly': 'true',
-          tabindex: '0',
+          'aria-multiline': 'true',
         }),
         viewerTheme,
       ],
@@ -139,12 +151,17 @@ function createEditor(): void {
 
 onMounted(createEditor)
 
-/** Replaces the read-only document when a tool produces a new JSON result. */
+/** Replaces the editable document when a tool produces a new JSON result. */
 watch(
   () => props.content,
   (content) => {
     // Updates cannot be dispatched before the editor has mounted.
     if (!editor) {
+      return
+    }
+
+    // Edits already emitted by this editor must retain the current cursor position.
+    if (content === editor.state.doc.toString()) {
       return
     }
 
