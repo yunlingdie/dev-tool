@@ -4,12 +4,14 @@ import { json } from '@codemirror/lang-json'
 import {
   bracketMatching,
   defaultHighlightStyle,
+  foldGutter,
+  foldKeymap,
   syntaxHighlighting,
 } from '@codemirror/language'
 import type { MatchResult } from '@codemirror/language'
 import { EditorState } from '@codemirror/state'
 import type { Range } from '@codemirror/state'
-import { Decoration, EditorView } from '@codemirror/view'
+import { Decoration, EditorView, keymap } from '@codemirror/view'
 import type { ViewUpdate } from '@codemirror/view'
 
 const props = defineProps<{
@@ -83,14 +85,28 @@ const viewerTheme = EditorView.theme({
   },
   '.cm-content': {
     minHeight: '190px',
-    padding: '16px',
+    padding: '16px 16px 16px 4px',
     caretColor: 'var(--focus)',
   },
   '.cm-line': {
     padding: '0',
   },
   '.cm-gutters': {
-    display: 'none',
+    backgroundColor: 'var(--input)',
+    color: 'var(--muted)',
+    border: 'none',
+    paddingLeft: '8px',
+  },
+  '.cm-foldGutter .cm-gutterElement': {
+    padding: '0 4px',
+  },
+  '.cm-foldGutter span:hover': {
+    color: 'var(--foreground)',
+  },
+  '.cm-foldPlaceholder': {
+    color: 'var(--muted)',
+    backgroundColor: 'var(--input)',
+    border: '1px solid var(--border)',
   },
   '&.cm-focused': {
     outline: 'none',
@@ -133,6 +149,9 @@ function createEditor(): void {
       doc: props.content,
       extensions: [
         json(),
+        // Fold JSON collections in the view while preserving the full editable document.
+        foldGutter(),
+        keymap.of(foldKeymap),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         bracketMatching({ renderMatch: renderBracketRange }),
         EditorView.updateListener.of(publishDocumentChange),
