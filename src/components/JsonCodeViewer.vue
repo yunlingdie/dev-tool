@@ -5,8 +5,11 @@ import {
   bracketMatching,
   defaultHighlightStyle,
   foldGutter,
+  foldInside,
   foldKeymap,
+  foldService,
   syntaxHighlighting,
+  syntaxTree,
 } from '@codemirror/language'
 import type { MatchResult } from '@codemirror/language'
 import { EditorState } from '@codemirror/state'
@@ -27,6 +30,34 @@ let editor: EditorView | null = null
 const matchingBracketDecoration = Decoration.mark({ class: 'cm-rangeBracket' })
 const nonmatchingBracketDecoration = Decoration.mark({ class: 'cm-invalidBracket' })
 const bracketRangeDecoration = Decoration.mark({ class: 'cm-bracketRange' })
+
+/** Adds folding for inline JSON collections that the multiline fold provider skips. */
+function foldInlineJson(state: EditorState, lineStart: number, lineEnd: number): { from: number, to: number } | null {
+  let range: { from: number, to: number } | null = null
+
+  syntaxTree(state).iterate({
+    from: lineStart,
+    to: lineEnd,
+    /** Finds the first complete inline object or array beginning on this line. */
+    enter(node) {
+      // Ancestors beginning on earlier lines must still allow their children to be inspected.
+      if (range || node.from < lineStart) {
+        return
+      }
+
+      // Strings and scalar values cannot hide a collection body.
+      if (node.name === 'Object' || node.name === 'Array') {
+        // Multiline collections keep the language's default folding behavior.
+        if (node.to <= lineEnd) {
+          range = foldInside(node.node)
+        }
+        return false
+      }
+    },
+  })
+
+  return range
+}
 
 /** Decorates matching bracket endpoints and the complete range between them. */
 function renderBracketRange(match: MatchResult): readonly Range<Decoration>[] {
@@ -149,6 +180,7 @@ function createEditor(): void {
       doc: props.content,
       extensions: [
         json(),
+        foldService.of(foldInlineJson),
         // Fold JSON collections in the view while preserving the full editable document.
         foldGutter(),
         keymap.of(foldKeymap),

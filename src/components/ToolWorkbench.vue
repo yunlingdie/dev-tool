@@ -257,6 +257,22 @@ function generatedItemKey(outputIndex: number, itemIndex: number): string {
   return `${outputIndex}-${itemIndex}`
 }
 
+/** Detects JSON collections from text outputs while retaining explicit renderer choices. */
+function detectOutputLanguage(content: string, declared: ToolOutput['language']): ToolOutput['language'] {
+  // Explicit formats and text without a collection root already have an appropriate renderer.
+  if (declared || !/^\s*[\[{]/.test(content)) {
+    return declared
+  }
+
+  try {
+    JSON.parse(content)
+    return 'json'
+  } catch {
+    // Text resembling JSON must remain readable when it is not a complete JSON document.
+    return undefined
+  }
+}
+
 /** Executes the current tool and converts thrown values into a visible error state. */
 async function runTool(mode: 'normal' | 'desensitize' = 'normal'): Promise<void> {
   // Repeated manual clicks are ignored; search handoffs queue through applyCurrentPrefill.
@@ -283,7 +299,14 @@ async function runTool(mode: 'normal' | 'desensitize' = 'normal'): Promise<void>
 
     // A result belongs on screen only while its search handoff is still the latest one.
     if (executionPrefillRevision === props.prefill?.revision) {
-      result.value = nextResult
+      result.value = {
+        ...nextResult,
+        language: detectOutputLanguage(nextResult.output, nextResult.language),
+        outputs: nextResult.outputs?.map((item) => ({
+          ...item,
+          language: detectOutputLanguage(item.content, item.language),
+        })),
+      }
     }
   } catch (caught) {
     // Errors from superseded searches must not replace feedback for the newer input.
